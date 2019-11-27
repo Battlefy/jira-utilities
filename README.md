@@ -16,4 +16,4 @@ Collection of jira utilities that can be used to gather various operational metr
 ### Running the script
 `Executed from project root`
 
-    env/bin/python3 epic-time-rollup.py --user {user} --api_token {token} --epics {comma separated list} --output_path {fully qualified path to output json}
+    env/bin/python3 epic-time-rollup.py --user {user} --api_token {token} --epics {comma separated list} --export_estimates -- export_estimates_path {fully qualified path to an output folder}
