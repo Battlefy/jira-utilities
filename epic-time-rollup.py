@@ -52,10 +52,10 @@ def parse_args():
     Parse arguments for epic-time-rollup.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--user")
-    parser.add_argument("--api_token")
-    parser.add_argument("--epics")
-    parser.add_argument("--output_path")
+    parser.add_argument("--user", required=True)
+    parser.add_argument("--api_token", required=True)
+    parser.add_argument("--epics", required=True)
+    parser.add_argument("--output_path", required=True)
 
     args = parser.parse_args()
     return args
