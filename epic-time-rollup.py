@@ -131,7 +131,7 @@ def generate_project_constants(jira, project, load_from_file=False, configuratio
 
                 return project_constants
 
-            # Dynamically create project infomation by naming convention
+    # Dynamically create project infomation by naming convention
     if project_strtype_id_map is None:
         project_strtype_id_map = {}
 
@@ -156,23 +156,29 @@ def generate_project_constants(jira, project, load_from_file=False, configuratio
                 sys.exit(-1)
 
     try:
+        # test for existence of issue types.
         projectConstants = ProjectConstants()
         projectConstants.key = full_project.key
-        projectConstants.subtask = IssueBundle(
-            project_strtype_id_map.get(project_id).get(SUBTASK_NAME).get("id"),
-            project_strtype_id_map.get(project_id).get(SUBTASK_NAME).get('estimate_field'))
-        projectConstants.task = IssueBundle(
-            project_strtype_id_map.get(project_id).get(TASK_NAME).get("id"),
-            project_strtype_id_map.get(project_id).get(TASK_NAME).get('estimate_field'))
-        projectConstants.story = IssueBundle(
-            project_strtype_id_map.get(project_id).get(STORY_NAME).get("id"),
-            project_strtype_id_map.get(project_id).get(STORY_NAME).get('estimate_field'))
-        projectConstants.epic = IssueBundle(
-            project_strtype_id_map.get(project_id).get(EPIC_NAME).get("id"),
-            project_strtype_id_map.get(project_id).get(EPIC_NAME).get('estimate_field'))
-        projectConstants.bug = IssueBundle(
-            project_strtype_id_map.get(project_id).get(BUG_NAME).get("id"),
-            project_strtype_id_map.get(project_id).get(BUG_NAME).get('estimate_field'))
+
+        if project_strtype_id_map.get(project_id).get(SUBTASK_NAME) is not None:
+            projectConstants.subtask = IssueBundle(
+                project_strtype_id_map.get(project_id).get(SUBTASK_NAME).get("id"), project_strtype_id_map.get(project_id).get(SUBTASK_NAME).get('estimate_field'))
+
+        if project_strtype_id_map.get(project_id).get(TASK_NAME) is not None:
+            projectConstants.task = IssueBundle(
+                project_strtype_id_map.get(project_id).get(TASK_NAME).get("id"), project_strtype_id_map.get(project_id).get(TASK_NAME).get('estimate_field'))
+
+        if project_strtype_id_map.get(project_id).get(STORY_NAME) is not None:
+            projectConstants.story = IssueBundle(
+                project_strtype_id_map.get(project_id).get(STORY_NAME).get("id"), project_strtype_id_map.get(project_id).get(STORY_NAME).get('estimate_field'))
+
+        if project_strtype_id_map.get(project_id).get(EPIC_NAME) is not None:
+            projectConstants.epic = IssueBundle(project_strtype_id_map.get(
+                project_id).get(EPIC_NAME).get("id"), project_strtype_id_map.get(project_id).get(EPIC_NAME).get('estimate_field'))
+
+        if project_strtype_id_map.get(project_id).get(BUG_NAME) is not None:
+            projectConstants.bug = IssueBundle(
+                project_strtype_id_map.get(project_id).get(BUG_NAME).get("id"), project_strtype_id_map.get(project_id).get(BUG_NAME).get('estimate_field'))
 
     except Exception as e:
         print("Issue creating projectConstants struct for {}".format(project.key))
