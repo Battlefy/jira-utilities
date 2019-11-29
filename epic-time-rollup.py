@@ -225,7 +225,12 @@ def extract_issue_estimate(jira, epic_sub_issue, project_constants, update_ticke
                     getattr(fetched.fields, project_constants.story.estimation_key))
             else:
                 unestimated_subtasks.append(fetched.key)
-        if update_ticket_estimates and getattr(epic_sub_issue.issue.fields, project_constants.story.estimation_key) is None:
+        if update_ticket_estimates:
+            # We want to make sure that we aren't flattening 'user story level estimates' with sub-task roll-up if that is not
+            # how teams are estimating. So if summed_time is 0.0, just yield to what's there already.
+            val = getattr(epic_sub_issue.issue.fields,
+                          project_constants.story.estimation_key)
+            max_value = val if epic_sub_issue.summed_time == 0.0 else epic_sub_issue.summed_time
             epic_sub_issue.issue.update(
                 fields={project_constants.story.estimation_key: epic_sub_issue.summed_time})
     return epic_sub_issue.summed_time
