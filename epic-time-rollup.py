@@ -63,6 +63,8 @@ def parse_args():
     parser.add_argument("--user", required=True)
     parser.add_argument("--api_token", required=True)
     parser.add_argument("--epics", required=True)
+    parser.add_argument("--update_ticket_estimates", action='store_true')
+    parser.add_argument("--force_toplevel_recalculate", action='store_true')
     parser.add_argument("--export_estimates", action='store_true')
     parser.add_argument("--export_estimates_path")
     parser.add_argument("--export_project_configs", action='store_true')
@@ -187,7 +189,7 @@ def generate_project_constants(jira, project, load_from_file=False, configuratio
     return projectConstants
 
 
-def extract_issue_estimate(jira, epic_sub_issue, project_constants):
+def extract_issue_estimate(jira, epic_sub_issue, project_constants, update_ticket_estimates=False, force_toplevel_recalculate=False):
     """
         jira - the jira connection.
         epic_sub_issue - the jira item to estimate.
@@ -203,7 +205,8 @@ def extract_issue_estimate(jira, epic_sub_issue, project_constants):
             epic_sub_issue.summed_time += float(
                 getattr(epic_sub_issue.issue.fields, project_constants.task.estimation_key))
     elif epic_sub_issue.issue.fields.issuetype.id == project_constants.story.type_id:
-        if getattr(epic_sub_issue.issue.fields, project_constants.story.estimation_key) is not None:
+        # Early out if story has estimate
+        if not force_toplevel_recalculate and getattr(epic_sub_issue.issue.fields, project_constants.story.estimation_key) is not None:
             epic_sub_issue.summed_time += float(
                 getattr(epic_sub_issue.issue.fields, project_constants.story.estimation_key))
             return epic_sub_issue.summed_time
@@ -222,7 +225,9 @@ def extract_issue_estimate(jira, epic_sub_issue, project_constants):
                     getattr(fetched.fields, project_constants.story.estimation_key))
             else:
                 unestimated_subtasks.append(fetched.key)
-
+        if update_ticket_estimates and getattr(epic_sub_issue.issue.fields, project_constants.story.estimation_key) is None:
+            epic_sub_issue.issue.update(
+                fields={project_constants.story.estimation_key: epic_sub_issue.summed_time})
     return epic_sub_issue.summed_time
 
 
@@ -233,7 +238,7 @@ def export_epics_json(root, epics_container):
     """
     projects_json = {}
     for epic_container in epics_container:
-        if epic_container.epic.key not in projects_json:
+        if epic_container.epic.fields.project.key not in projects_json:
             projects_json[epic_container.epic.fields.project.key] = []
 
         print("Processing to JSON structure of {}".format(epic_container.epic.key))
@@ -336,7 +341,7 @@ def main():
     for epic_container in epics_container:
         for issue in epic_container.issues:
             extract_issue_estimate(
-                jira, issue, project_configs[epic_container.epic.fields.project.id])
+                jira, issue, project_configs[epic_container.epic.fields.project.id], args.update_ticket_estimates, args.force_toplevel_recalculate)
             epic_container.summed_time += issue.summed_time
 
     if args.export_estimates:
