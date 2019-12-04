@@ -55,7 +55,7 @@ class ProjectConstants:
 ### Methods ###
 
 
-def parse_args():
+def parse_args(args_list):
     """
     Parse arguments for epic-time-rollup.
     """
@@ -72,7 +72,7 @@ def parse_args():
     parser.add_argument("--import_project_configs", action='store_true')
     parser.add_argument("--import_project_configs_path")
 
-    args = parser.parse_args()
+    args = parser.parse_args(args=args_list)
 
     if(args.export_estimates == True):
         if args.export_estimates_path is None:
@@ -292,9 +292,9 @@ def export_project_configs_json(root, project_configs_container):
                 project_configs_container[project].dict(), indent=4, separators=(",", ": ")))
 
 
-def main():
+def execute(args):
     args = parse_args()
-    print("Running JIRA Tabulations")
+    print("Running JIRA Tabulations for Epics")
     jira_options = {"server": "https://battlefy.atlassian.net"}
     jira = JIRA(
         options=jira_options,
@@ -355,7 +355,3 @@ def main():
     if args.export_project_configs:
         export_project_configs_json(
             args.export_project_config_path, project_configs)
-
-
-### Main ###
-main()
