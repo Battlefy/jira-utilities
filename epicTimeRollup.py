@@ -292,8 +292,8 @@ def export_project_configs_json(root, project_configs_container):
                 project_configs_container[project].dict(), indent=4, separators=(",", ": ")))
 
 
-def execute(args):
-    args = parse_args()
+def execute(args_list):
+    args = parse_args(args_list)
     print("Running JIRA Tabulations for Epics")
     jira_options = {"server": "https://battlefy.atlassian.net"}
     jira = JIRA(
@@ -355,3 +355,5 @@ def execute(args):
     if args.export_project_configs:
         export_project_configs_json(
             args.export_project_config_path, project_configs)
+
+    return epics_container
