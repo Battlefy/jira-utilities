@@ -23,12 +23,26 @@ class UserStory:
     subtasks: []
     summed_time: float
 
+    def dict(self):
+        return {'key': self.issue.key, 'summary': self.issue.fields.summary, 'time': self.summed_time}
+
 
 @dataclass
 class Epic:
     epic: JIRA.issue
     issues: []
     summed_time: float
+
+    def dict(self):
+        issues_json = []
+        est_count = 0
+        for issue in self.issues:
+            di = issue.dict()
+            issues_json.append(issue.dict())
+            if issue.summed_time > 0.0:
+                est_count += 1
+
+        return {'key': self.epic.key, 'summary': self.epic.fields.summary, 'time': self.summed_time, 'subticket_count': len(self.issues), 'subticket_estimate_count': est_count, 'issues': issues_json}
 
 
 @dataclass
@@ -230,9 +244,9 @@ def extract_issue_estimate(jira, epic_sub_issue, project_constants, update_ticke
             # how teams are estimating. So if summed_time is 0.0, just yield to what's there already.
             val = getattr(epic_sub_issue.issue.fields,
                           project_constants.story.estimation_key)
-            max_value = val if epic_sub_issue.summed_time == 0.0 else epic_sub_issue.summed_time
+            max_value = val if epic_sub_issue.summed_time == 0 or epic_sub_issue.summed_time == 0.0 else epic_sub_issue.summed_time
             epic_sub_issue.issue.update(
-                fields={project_constants.story.estimation_key: epic_sub_issue.summed_time})
+                fields={project_constants.story.estimation_key: max_value})
     return epic_sub_issue.summed_time
 
 
@@ -247,28 +261,9 @@ def export_epics_json(root, epics_container):
             projects_json[epic_container.epic.fields.project.key] = []
 
         print("Processing to JSON structure of {}".format(epic_container.epic.key))
-        epic_json = {}
-        epic_json["KEY"] = epic_container.epic.key
-        epic_json["SUMMARY"] = epic_container.epic.fields.summary
-        epic_json["TIME"] = epic_container.summed_time
-        epic_json["SUB TICKET COUNT"] = 0
-        epic_json["EPIC ISSUES"] = []
-        epic_json["ESTIMATED SUB TICKETS"] = 0
 
-        for epic_issue in epic_container.issues:
-            epic_json["SUB TICKET COUNT"] += 1
-
-            issue_json = {}
-            issue_json["KEY"] = epic_issue.issue.key
-            issue_json["SUMMARY"] = epic_issue.issue.fields.summary
-            issue_json["TIME"] = epic_issue.summed_time
-
-            if epic_issue.summed_time > 0.0:
-                epic_json["ESTIMATED SUB TICKETS"] += 1
-
-            epic_json["EPIC ISSUES"].append(issue_json)
-
-        projects_json[epic_container.epic.fields.project.key].append(epic_json)
+        projects_json[epic_container.epic.fields.project.key].append(
+            epic_container.dict())
 
     for project_key in projects_json:
         out_file_path = os.path.join(

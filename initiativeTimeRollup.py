@@ -69,7 +69,7 @@ def execute(args_list):
     )
 
     initiatives = args.initiatives.split(",")
-    initiatives_struct = []
+    initiatives_container = []
 
     for initiative in initiatives:
         print("Obtaining roll-up for {}".format(initiative))
@@ -84,7 +84,8 @@ def execute(args_list):
         for epic in epics_container:
             curr_initiative.summed_time += epic.summed_time
 
-        initiatives_struct.append(curr_initiative)
+        initiatives_container.append(curr_initiative)
 
-    for initiative in initiatives_struct:
-        print(initiative)
+    if args.export_estimates:
+        export_initiatives_json(
+            args.export_estimates_path, initiatives_container)
