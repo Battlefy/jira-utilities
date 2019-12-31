@@ -122,6 +122,6 @@ def execute(args_list):
                     jira, issue, project_configs[root_project_id])
                 release.summed_time += issue.summed_time
 
-        if args.export_estimates:
-            export_releases_json(
-                args.export_estimates_path, releases_container)
+    if args.export_estimates:
+        export_releases_json(
+            args.export_estimates_path, releases_container)
