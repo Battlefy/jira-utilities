@@ -1,6 +1,7 @@
 import argparse
 import initiativeTimeRollup
 import epicTimeRollup
+import releaseTimeRollup
 
 
 def parse_args():
@@ -20,6 +21,9 @@ def main():
     elif args.command == "epicTimeRollup":
         print("Executing {}".format(args.command))
         epicTimeRollup.execute(passthrough)
+    elif args.command == "releaseTimeRollup":
+        print("Executing {}".format(args.command))
+        releaseTimeRollup.execute(passthrough)
     else:
         print("Unknown command {}".format(args.command))
 
