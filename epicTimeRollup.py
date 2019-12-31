@@ -331,7 +331,7 @@ def execute(args_list):
                     query_string,
                     fields="{}, subtasks, summary, issuetype".format(
                         cust_key_str
-                    ),
+                    )
                 )
             ]
             epic_container.issues.extend(epic_issues)

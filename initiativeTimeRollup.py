@@ -14,6 +14,33 @@ class Initiative:
     summed_time: float
 
 
+def export_initiatives_json(root, initiatives_container):
+    """
+        file - fully qualified path to file in which to write to.
+        initiatives_container - the list of initiative DataObjects to export as JSON.
+    """
+    projects_json = {}
+    for initiative_container in initiatives_container:
+        if initiative_container.epic.fields.project.key not in projects_json:
+            projects_json[initiative_container.epic.fields.project.key] = []
+
+        print("Processing to JSON structure of {}".format(
+            initiative_container.epic.key))
+
+        projects_json[initiative_container.epic.fields.project.key].append(
+            initiative_container.dict())
+
+    for project_key in projects_json:
+        out_file_path = os.path.join(
+            root, "{}_estimates.json".format(project_key))
+
+        with open(out_file_path, "w") as output_file:
+            output_file.writelines(json.dumps(
+                projects_json[project_key], indent=4, separators=(",", ": ")))
+
+    print("Finished writing to file.")
+
+
 def parse_args(args_list):
     """
     Parse arguments for epic-time-rollup.
