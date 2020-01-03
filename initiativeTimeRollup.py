@@ -13,12 +13,15 @@ class Initiative:
     initiative: JIRA.issue
     epics: []
     summed_time: float
+    remaining_time: float
 
     def dict(self):
         epic_json = []
+
         for epic in self.epics:
             epic_json.append(epic.dict())
-        return {'key': self.initiative.key, 'summary': self.initiative.fields.summary, 'epics': epic_json, 'summed_time': self.summed_time}
+
+        return {'key': self.initiative.key, 'summary': self.initiative.fields.summary, 'summed_time': self.summed_time, 'remaining_time': self.remaining_time, 'epics': epic_json}
 
 
 def export_initiatives_json(root, initiatives_container):
@@ -117,10 +120,12 @@ def execute(args_list):
         epics_container = epicTimeRollup.execute(
             new_args) if len(keys) != 0 else []
 
-        curr_initiative = Initiative(initiative_issue, epics_container, 0.0)
+        curr_initiative = Initiative(
+            initiative_issue, epics_container, 0.0, 0.0)
 
         for epic in epics_container:
             curr_initiative.summed_time += epic.summed_time
+            curr_initiative.remaining_time += epic.remaining_time
 
         initiatives_container.append(curr_initiative)
 
