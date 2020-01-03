@@ -18,7 +18,7 @@ class Initiative:
         epic_json = []
         for epic in self.epics:
             epic_json.append(epic.dict())
-        return {'key': self.initiative.key, 'epics': epic_json, 'summed_time': self.summed_time}
+        return {'key': self.initiative.key, 'summary': self.initiative.fields.summary, 'epics': epic_json, 'summed_time': self.summed_time}
 
 
 def export_initiatives_json(root, initiatives_container):
@@ -112,8 +112,10 @@ def execute(args_list):
         initiative_issue = jira.issue(initiative)
         keys = [
             x.inwardIssue.key for x in initiative_issue.fields.issuelinks if 'FRONT' not in x.inwardIssue.key]
+
         new_args = create_epic_rollup_args(args_list, initiative, keys)
-        epics_container = epicTimeRollup.execute(new_args)
+        epics_container = epicTimeRollup.execute(
+            new_args) if len(keys) != 0 else []
 
         curr_initiative = Initiative(initiative_issue, epics_container, 0.0)
 
