@@ -3,6 +3,7 @@ import epicTimeRollup
 from dataclasses import dataclass, asdict
 import os
 import shutil
+import json
 from jira import JIRA
 from subprocess import Popen
 
@@ -13,30 +14,38 @@ class Initiative:
     epics: []
     summed_time: float
 
+    def dict(self):
+        epic_json = []
+        for epic in self.epics:
+            epic_json.append(epic.dict())
+        return {'key': self.initiative.key, 'epics': epic_json, 'summed_time': self.summed_time}
+
 
 def export_initiatives_json(root, initiatives_container):
     """
         file - fully qualified path to file in which to write to.
         initiatives_container - the list of initiative DataObjects to export as JSON.
     """
-    projects_json = {}
+    initaitives_json = {}
     for initiative_container in initiatives_container:
-        if initiative_container.epic.fields.project.key not in projects_json:
-            projects_json[initiative_container.epic.fields.project.key] = []
+        if initiative_container.initiative.fields.project.key not in initaitives_json:
+            initaitives_json[initiative_container.initiative.fields.project.key] = [
+            ]
 
         print("Processing to JSON structure of {}".format(
-            initiative_container.epic.key))
+            initiative_container.initiative.key))
 
-        projects_json[initiative_container.epic.fields.project.key].append(
+        initaitives_json[initiative_container.initiative.fields.project.key].append(
             initiative_container.dict())
 
-    for project_key in projects_json:
+    for project_key in initaitives_json:
         out_file_path = os.path.join(
             root, "{}_estimates.json".format(project_key))
 
         with open(out_file_path, "w") as output_file:
+            print("Writing file {}".format(out_file_path))
             output_file.writelines(json.dumps(
-                projects_json[project_key], indent=4, separators=(",", ": ")))
+                initaitives_json[project_key], indent=4, separators=(",", ": ")))
 
     print("Finished writing to file.")
 
