@@ -32,17 +32,21 @@ class Epic:
     epic: JIRA.issue
     issues: []
     summed_time: float
+    remaining_time: float
 
     def dict(self):
         issues_json = []
         est_count = 0
+        complete_count = 0
         for issue in self.issues:
             di = issue.dict()
             issues_json.append(issue.dict())
             if issue.summed_time > 0.0:
                 est_count += 1
+            if issue.issue.fields.status.name != "Done":
+                complete_count += 1
 
-        return {'key': self.epic.key, 'summary': self.epic.fields.summary, 'time': self.summed_time, 'subticket_count': len(self.issues), 'subticket_estimate_count': est_count, 'issues': issues_json}
+        return {'key': self.epic.key, 'summary': self.epic.fields.summary, 'time': self.summed_time, 'remaining_time': self.remaining_time, 'subticket_count': len(self.issues), 'subticket_estimate_count': est_count, 'subticket_to_incomplete_count': complete_count, 'issues': issues_json}
 
 
 @dataclass
@@ -308,7 +312,7 @@ def execute(args_list):
                 project_configs[issue.fields.project.id] = generate_project_constants(
                     jira, issue.fields.project, load_from_file=args.import_project_configs, configuration_folder_root=args.import_project_configs_path)
 
-            epic_container = Epic(issue, [], 0.0)
+            epic_container = Epic(issue, [], 0.0, 0.0)
             epics_container.append(epic_container)
 
         except Exception as e:
@@ -330,7 +334,7 @@ def execute(args_list):
                 for e in jira.search_issues(
                     query_string,
                     maxResults=1000,
-                    fields="{}, subtasks, summary, issuetype".format(
+                    fields="{}, subtasks, status, summary, issuetype".format(
                         cust_key_str
                     )
                 )
@@ -344,6 +348,8 @@ def execute(args_list):
             extract_issue_estimate(
                 jira, issue, project_configs[epic_container.epic.fields.project.id], args.update_ticket_estimates, args.force_toplevel_recalculate)
             epic_container.summed_time += issue.summed_time
+            if issue.issue.fields.status.name != "Done":
+                epic_container.remaining_time += issue.summed_time
 
     if args.export_estimates:
         export_epics_json(args.export_estimates_path, epics_container)
