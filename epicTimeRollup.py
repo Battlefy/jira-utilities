@@ -329,6 +329,7 @@ def execute(args_list):
                 )
                 for e in jira.search_issues(
                     query_string,
+                    maxResults=1000,
                     fields="{}, subtasks, summary, issuetype".format(
                         cust_key_str
                     )

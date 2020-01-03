@@ -102,7 +102,7 @@ def execute(args_list):
         print("Obtaining roll-up for {}".format(initiative))
         initiative_issue = jira.issue(initiative)
         keys = [
-            x.inwardIssue.key for x in initiative_issue.fields.issuelinks if 'BI' not in x.inwardIssue.key]
+            x.inwardIssue.key for x in initiative_issue.fields.issuelinks if 'FRONT' not in x.inwardIssue.key]
         new_args = create_epic_rollup_args(args_list, initiative, keys)
         epics_container = epicTimeRollup.execute(new_args)
 
