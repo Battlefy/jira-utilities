@@ -33,8 +33,8 @@ class Epic:
     issues: []
     summed_time: float
     remaining_time: float
-    incomplete_estimated_count: float
-    incomplete_unestimated_count: float
+    incomplete_estimated_count: int
+    incomplete_unestimated_count: int
 
     def dict(self):
         issues_json = []

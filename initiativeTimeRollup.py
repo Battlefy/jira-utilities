@@ -17,11 +17,14 @@ class Initiative:
 
     def dict(self):
         epic_json = []
-
+        incomplete_unestimated_count = 0
+        incomplete_estimated_count = 0
         for epic in self.epics:
             epic_json.append(epic.dict())
+            incomplete_estimated_count += epic.incomplete_estimated_count
+            incomplete_unestimated_count += epic.incomplete_unestimated_count
 
-        return {'key': self.initiative.key, 'summary': self.initiative.fields.summary, 'summed_time': self.summed_time, 'remaining_time': self.remaining_time, 'epics': epic_json}
+        return {'key': self.initiative.key, 'summary': self.initiative.fields.summary, 'summed_time': self.summed_time, 'remaining_time': self.remaining_time, 'incomplete_estimated_count': incomplete_estimated_count, 'incomplete_unestimated_count': incomplete_unestimated_count, 'epics': epic_json}
 
 
 def export_initiatives_json(root, initiatives_container):
