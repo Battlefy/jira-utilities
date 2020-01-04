@@ -24,7 +24,7 @@ class UserStory:
     summed_time: float
 
     def dict(self):
-        return {'key': self.issue.key, 'summary': self.issue.fields.summary, 'time': self.summed_time}
+        return {'key': self.issue.key, 'summary': self.issue.fields.summary, 'status': self.issue.fields.status.name, 'time': self.summed_time}
 
 
 @dataclass

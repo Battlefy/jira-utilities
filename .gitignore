@@ -105,3 +105,4 @@ venv.bak/
 .vscode/launch.json
 output/*
 .vscode/settings.json
+.DS_Store
