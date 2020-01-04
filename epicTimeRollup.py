@@ -33,20 +33,16 @@ class Epic:
     issues: []
     summed_time: float
     remaining_time: float
+    incomplete_estimated_count: float
+    incomplete_unestimated_count: float
 
     def dict(self):
         issues_json = []
-        est_count = 0
-        complete_count = 0
         for issue in self.issues:
             di = issue.dict()
             issues_json.append(issue.dict())
-            if issue.summed_time > 0.0:
-                est_count += 1
-            if issue.issue.fields.status.name != "Done":
-                complete_count += 1
 
-        return {'key': self.epic.key, 'summary': self.epic.fields.summary, 'time': self.summed_time, 'remaining_time': self.remaining_time, 'subticket_count': len(self.issues), 'subticket_estimate_count': est_count, 'subticket_to_incomplete_count': complete_count, 'issues': issues_json}
+        return {'key': self.epic.key, 'summary': self.epic.fields.summary, 'time': self.summed_time, 'remaining_time': self.remaining_time, 'subticket_count': len(self.issues), 'incomplete_estimated_count': self.incomplete_estimated_count, 'incomplete_unestimated_count': self.incomplete_unestimated_count, 'issues': issues_json}
 
 
 @dataclass
@@ -312,7 +308,7 @@ def execute(args_list):
                 project_configs[issue.fields.project.id] = generate_project_constants(
                     jira, issue.fields.project, load_from_file=args.import_project_configs, configuration_folder_root=args.import_project_configs_path)
 
-            epic_container = Epic(issue, [], 0.0, 0.0)
+            epic_container = Epic(issue, [], 0.0, 0.0, 0.0, 0.0)
             epics_container.append(epic_container)
 
         except Exception as e:
@@ -350,6 +346,10 @@ def execute(args_list):
             epic_container.summed_time += issue.summed_time
             if issue.issue.fields.status.name != "Done":
                 epic_container.remaining_time += issue.summed_time
+                if issue.summed_time <= 0.0:
+                    epic_container.incomplete_unestimated_count += 1
+                else:
+                    epic_container.incomplete_estimated_count += 1
 
     if args.export_estimates:
         export_epics_json(args.export_estimates_path, epics_container)
