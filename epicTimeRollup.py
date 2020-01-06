@@ -86,7 +86,7 @@ def parse_args(args_list):
     parser.add_argument("--import_project_configs", action='store_true')
     parser.add_argument("--import_project_configs_path")
 
-    args = parser.parse_args(args=args_list)
+    args, passthrough = parser.parse_known_args(args=args_list)
 
     if(args.export_estimates == True):
         if args.export_estimates_path is None:

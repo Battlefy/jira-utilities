@@ -2,6 +2,8 @@ import argparse
 import epicTimeRollup
 from dataclasses import dataclass, asdict
 import os
+import sys
+import datetime
 import shutil
 import json
 from jira import JIRA
@@ -72,8 +74,19 @@ def parse_args(args_list):
     parser.add_argument("--export_project_config_path")
     parser.add_argument("--import_project_configs", action='store_true')
     parser.add_argument("--import_project_configs_path")
+    parser.add_argument("--filter_month", action='store_true')
+    parser.add_argument("--filter_month_numbers")
+    parser.add_argument("--update_initiative_estimates", action='store_true')
 
     args = parser.parse_args(args=args_list)
+
+    if args.filter_month == True:
+        if args.filter_month_numbers is None:
+            argparse.ArgumentError(
+                "User provided --filter_month option but did not provide --filter_month_numbers")
+            sys.exit(-2)
+        else:
+            args.filter_month_numbers = args.filter_month_numbers.split(",")
 
     return args
 
@@ -103,6 +116,8 @@ def create_epic_rollup_args(source_args, initiative, epics):
 
 def execute(args_list):
     args = parse_args(args_list)
+    INITIAL_TIME_KEY = "customfield_11609"
+    REMAINING_TIME_KEY = "customfield_11639"
     print("Running JIRA Tabulations for Initiatives")
     jira_options = {"server": "https://battlefy.atlassian.net"}
     jira = JIRA(
@@ -118,10 +133,26 @@ def execute(args_list):
         initiative_issue = jira.issue(initiative)
         keys = [
             x.inwardIssue.key for x in initiative_issue.fields.issuelinks if 'FRONT' not in x.inwardIssue.key]
+        filtered_keys = []
 
-        new_args = create_epic_rollup_args(args_list, initiative, keys)
+        if args.filter_month == True:
+            for epic_key in keys:
+                epic_pre_add = jira.issue(epic_key)
+                if epic_pre_add.fields.duedate is not None:
+                    date_object = datetime.datetime.strptime(
+                        epic_pre_add.fields.duedate, "%Y-%m-%d")
+                    if str(date_object.month) in args.filter_month_numbers:
+                        filtered_keys.append(epic_key)
+                else:
+                    # if no due date, just include
+                    filtered_keys.append(epic_key)
+        else:
+            filtered_keys.extend(keys)
+
+        new_args = create_epic_rollup_args(
+            args_list, initiative, filtered_keys)
         epics_container = epicTimeRollup.execute(
-            new_args) if len(keys) != 0 else []
+            new_args) if len(filtered_keys) != 0 else []
 
         curr_initiative = Initiative(
             initiative_issue, epics_container, 0.0, 0.0)
@@ -131,6 +162,14 @@ def execute(args_list):
             curr_initiative.remaining_time += epic.remaining_time
 
         initiatives_container.append(curr_initiative)
+
+    if args.update_initiative_estimates:
+        # update the SP estimate on the initiatives
+        for initiative in initiatives_container:
+            initiative.initiative.update(fields={
+                INITIAL_TIME_KEY: initiative.summed_time})
+            initiative.initiative.update(fields={
+                REMAINING_TIME_KEY: initiative.remaining_time})
 
     if args.export_estimates:
         export_initiatives_json(
