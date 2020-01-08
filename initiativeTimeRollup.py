@@ -252,7 +252,7 @@ def execute(args_list):
                     start_date_object = datetime.datetime(
                         end_date_object.year, end_date_object.month, end_date_object.day)
 
-                delta_days = (end_date_object - start_date_object).day
+                delta_days = (end_date_object - start_date_object).days
 
                 iterations = end_date_object.month + 1 - start_date_object.month
 
