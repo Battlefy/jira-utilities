@@ -16,17 +16,25 @@ class Initiative:
     epics: []
     summed_time: float
     remaining_time: float
+    incomplete_estimated_count: int
+    incomplete_unestimated_count: int
+
+    def calculate_estimate_counts(self):
+        self.incomplete_unestimated_count = 0
+        self.incomplete_estimated_count = 0
+
+        for epic in self.epics:
+            self.incomplete_estimated_count += epic.incomplete_estimated_count
+            self.incomplete_unestimated_count += epic.incomplete_unestimated_count
 
     def dict(self):
         epic_json = []
-        incomplete_unestimated_count = 0
-        incomplete_estimated_count = 0
         for epic in self.epics:
             epic_json.append(epic.dict())
-            incomplete_estimated_count += epic.incomplete_estimated_count
-            incomplete_unestimated_count += epic.incomplete_unestimated_count
 
-        return {'key': self.initiative.key, 'summary': self.initiative.fields.summary, 'summed_time': self.summed_time, 'remaining_time': self.remaining_time, 'incomplete_estimated_count': incomplete_estimated_count, 'incomplete_unestimated_count': incomplete_unestimated_count, 'epics': epic_json}
+        self.calculate_estimate_counts()
+
+        return {'key': self.initiative.key, 'summary': self.initiative.fields.summary, 'summed_time': self.summed_time, 'remaining_time': self.remaining_time, 'incomplete_estimated_count': self.incomplete_estimated_count, 'incomplete_unestimated_count': self.incomplete_unestimated_count, 'epics': epic_json}
 
 
 def export_initiatives_json(root, initiatives_container):
@@ -118,6 +126,8 @@ def execute(args_list):
     args = parse_args(args_list)
     INITIAL_TIME_KEY = "customfield_11609"
     REMAINING_TIME_KEY = "customfield_11639"
+    CONFIDENCE_INTERVAL_KEY = "customfield_11641"
+    INCOMPLETE_ISSUE_COUNT_KEY = "customfield_11642"
     print("Running JIRA Tabulations for Initiatives")
     jira_options = {"server": "https://battlefy.atlassian.net"}
     jira = JIRA(
@@ -155,7 +165,7 @@ def execute(args_list):
             new_args) if len(filtered_keys) != 0 else []
 
         curr_initiative = Initiative(
-            initiative_issue, epics_container, 0.0, 0.0)
+            initiative_issue, epics_container, 0.0, 0.0, 0, 0)
 
         for epic in epics_container:
             curr_initiative.summed_time += epic.summed_time
@@ -166,10 +176,23 @@ def execute(args_list):
     if args.update_initiative_estimates:
         # update the SP estimate on the initiatives
         for initiative in initiatives_container:
+            initiative.calculate_estimate_counts()
+
+            ratio = 0 if initiative.incomplete_estimated_count == 0 and initiative.incomplete_unestimated_count == 0 else (
+                initiative.incomplete_estimated_count / (initiative.incomplete_estimated_count + initiative.incomplete_unestimated_count))
+            ratio = ratio * 100
+
+            if ratio > 95:
+                ratio = 95
+
             initiative.initiative.update(fields={
                 INITIAL_TIME_KEY: initiative.summed_time})
             initiative.initiative.update(fields={
                 REMAINING_TIME_KEY: initiative.remaining_time})
+            initiative.initiative.update(fields={
+                CONFIDENCE_INTERVAL_KEY: int(ratio)})
+            initiative.initiative.update(fields={
+                                         INCOMPLETE_ISSUE_COUNT_KEY: initiative.incomplete_estimated_count+initiative.incomplete_unestimated_count})
 
     if args.export_estimates:
         export_initiatives_json(
