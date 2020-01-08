@@ -81,6 +81,8 @@ def parse_args(args_list):
     parser.add_argument("--export_project_configs", action='store_true')
     parser.add_argument("--export_project_config_path")
     parser.add_argument("--import_project_configs", action='store_true')
+    parser.add_argument("--story_point_weight", default=5)
+    parser.add_argument("--story_point_weight_ceiling", default=25)
     parser.add_argument("--import_project_configs_path")
     parser.add_argument("--filter_month", action='store_true')
     parser.add_argument("--filter_month_numbers")
@@ -128,6 +130,7 @@ def execute(args_list):
     REMAINING_TIME_KEY = "customfield_11639"
     CONFIDENCE_INTERVAL_KEY = "customfield_11641"
     INCOMPLETE_ISSUE_COUNT_KEY = "customfield_11642"
+
     print("Running JIRA Tabulations for Initiatives")
     jira_options = {"server": "https://battlefy.atlassian.net"}
     jira = JIRA(
@@ -181,6 +184,21 @@ def execute(args_list):
             ratio = 0 if initiative.incomplete_estimated_count == 0 and initiative.incomplete_unestimated_count == 0 else (
                 initiative.incomplete_estimated_count / (initiative.incomplete_estimated_count + initiative.incomplete_unestimated_count))
             ratio = ratio * 100
+
+            story_point_average = 0 if initiative.incomplete_estimated_count == 0 else initiative.remaining_time / \
+                initiative.incomplete_estimated_count
+
+            if ratio != 0:
+                # weight in the distribution of story points
+                # if the average story points per ticket is <=story_point_weight (default 5)
+                # retain our weighting; if not, reduce confidence rating
+                # by at most story_point_weight_ceiling (default 80%)
+                if story_point_average < args.story_point_weight:
+                    story_point_average = args.story_point_weight
+                elif story_point_average > args.story_point_weight_ceiling:
+                    story_point_average = args.story_point_weight_ceiling
+
+                ratio *= (args.story_point_weight/story_point_average)
 
             if ratio > 95:
                 ratio = 95
