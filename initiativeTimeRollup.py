@@ -11,6 +11,14 @@ from subprocess import Popen
 
 
 @dataclass
+class MonthWorkload:
+    month: int
+    epics: []
+    summed_time: float
+    remaining_time: float
+
+
+@dataclass
 class Initiative:
     initiative: JIRA.issue
     epics: []
@@ -87,6 +95,7 @@ def parse_args(args_list):
     parser.add_argument("--filter_month", action='store_true')
     parser.add_argument("--filter_month_numbers")
     parser.add_argument("--update_initiative_estimates", action='store_true')
+    parser.add_argument("--create_calendar_schedule", action='store_true')
 
     args = parser.parse_args(args=args_list)
 
@@ -130,6 +139,7 @@ def execute(args_list):
     REMAINING_TIME_KEY = "customfield_11639"
     CONFIDENCE_INTERVAL_KEY = "customfield_11641"
     INCOMPLETE_ISSUE_COUNT_KEY = "customfield_11642"
+    START_DATE_KEY = "customfield_11600"
 
     print("Running JIRA Tabulations for Initiatives")
     jira_options = {"server": "https://battlefy.atlassian.net"}
@@ -215,3 +225,47 @@ def execute(args_list):
     if args.export_estimates:
         export_initiatives_json(
             args.export_estimates_path, initiatives_container)
+
+    if args.create_calendar_schedule:
+        month_distributions = {}
+        skipped_epics = []
+        print("Calculating calendar rooted capacity demand...")
+        for initiative in initiatives_container:
+            for epic in initiative.epics:
+                start_date_object = None
+                end_date_object = None
+
+                if epic.epic.fields.duedate is not None:
+                    end_date_object = datetime.datetime.strptime(
+                        epic.epic.fields.duedate, "%Y-%m-%d")
+                elif initiative.initiative.fields.duedate is not None:
+                    end_date_object = datetime.datetime.strptime(
+                        initiative.initiative.fields.duedate, "%Y-%m-%d")
+                else:
+                    skipped_epics.append(epic)
+                    continue
+
+                if getattr(epic.epic.fields, START_DATE_KEY) is not None:
+                    start_date_object = datetime.datetime.strptime(
+                        getattr(epic.epic.fields, START_DATE_KEY), "%Y-%m-%d")
+                else:
+                    start_date_object = datetime.datetime(
+                        end_date_object.year, end_date_object.month, end_date_object.day)
+
+                delta_days = (end_date_object - start_date_object).day
+
+                iterations = end_date_object.month + 1 - start_date_object.month
+
+                for i in range(iterations):
+                    month_number = start_date_object.month + i
+                    if month_number not in month_distributions:
+                        month_distributions[month_number] = MonthWorkload(
+                            month_number, [], 0.0, 0.0)
+                        month_distributions[month_number].epics.append(epic)
+
+                    month_distributions[month_number].summed_time += float(
+                        epic.summed_time / iterations)
+                    month_distributions[month_number].remaining_time += float(
+                        epic.remaining_time / iterations)
+
+        print("Done")
