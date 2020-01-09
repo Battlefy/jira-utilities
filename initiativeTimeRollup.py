@@ -4,6 +4,8 @@ from dataclasses import dataclass, asdict
 import os
 import sys
 import datetime
+import math
+import calendar
 import shutil
 import json
 from jira import JIRA
@@ -43,6 +45,33 @@ class Initiative:
         self.calculate_estimate_counts()
 
         return {'key': self.initiative.key, 'summary': self.initiative.fields.summary, 'summed_time': self.summed_time, 'remaining_time': self.remaining_time, 'incomplete_estimated_count': self.incomplete_estimated_count, 'incomplete_unestimated_count': self.incomplete_unestimated_count, 'epics': epic_json}
+
+
+def diff_month(d1, d2):
+    return (d1.year - d2.year) * 12 + d1.month - d2.month
+
+
+def get_next_month_start_date(start_date, month_to_add):
+    year = start_date.year
+    month = start_date.month
+    day = 1
+
+    while month_to_add > 0:
+        if month + 1 <= 12:
+            month += 1
+        else:
+            year += 1
+            month = 1
+        month_to_add -= 1
+
+    return datetime.datetime(year, month, day)
+
+
+def get_current_month_end_date(current_date, end_bound_date):
+    if current_date.month == end_bound_date.month and end_bound_date.year == current_date.year:
+        return end_bound_date
+    else:
+        return datetime.datetime(current_date.year, current_date.month, calendar.monthrange(current_date.year, current_date.month)[1])
 
 
 def export_initiatives_json(root, initiatives_container):
@@ -252,20 +281,41 @@ def execute(args_list):
                     start_date_object = datetime.datetime(
                         end_date_object.year, end_date_object.month, end_date_object.day)
 
-                delta_days = (end_date_object - start_date_object).days
+                total_delta_days = (
+                    end_date_object - start_date_object).days + 1
+                summed_calc_total_delta_days = (end_date_object - datetime.datetime.today()).days + 1 if start_date_object < datetime.datetime.today(
+                ) and datetime.datetime.today() < end_date_object else total_delta_days
+                delta_months = diff_month(end_date_object, start_date_object)
 
-                iterations = end_date_object.month + 1 - start_date_object.month
+                itr_date = start_date_object
 
-                for i in range(iterations):
-                    month_number = start_date_object.month + i
-                    if month_number not in month_distributions:
-                        month_distributions[month_number] = MonthWorkload(
-                            month_number, [], 0.0, 0.0)
-                        month_distributions[month_number].epics.append(epic)
+                for i in range(delta_months+1):
+                    end_date = get_current_month_end_date(
+                        itr_date, end_date_object)
+                    micro_delta_days = (end_date - itr_date).days + 1
+                    month_distribution_key = str(
+                        itr_date.year)+"-"+str(itr_date.month)
+                    if month_distribution_key not in month_distributions:
+                        month_distributions[month_distribution_key] = MonthWorkload(
+                            itr_date.month, [], 0.0, 0.0)
+                        month_distributions[month_distribution_key].epics.append(
+                            epic)
 
-                    month_distributions[month_number].summed_time += float(
-                        epic.summed_time / iterations)
-                    month_distributions[month_number].remaining_time += float(
-                        epic.remaining_time / iterations)
+                    month_distributions[month_distribution_key].summed_time += round(float(
+                        epic.summed_time * (micro_delta_days / total_delta_days)), 2)
+
+                    # remaining time is only pertinent for the section of time after today()
+                    if (itr_date < datetime.datetime.today()):
+                        # adjust for the case where we are currently calculating this month, wherein we want to provide some partial
+                        # counting
+                        if (itr_date.month == datetime.datetime.today().month) and (itr_date.year == datetime.datetime.today().year):
+                            micro_delta_days = (
+                                end_date - datetime.datetime.today()).days + 1 if (end_date - datetime.datetime.today()).days >= 0 else 0
+                        else:
+                            micro_delta_days = 0
+
+                    month_distributions[month_distribution_key].remaining_time += round(float(
+                        epic.remaining_time * (micro_delta_days / summed_calc_total_delta_days)), 2)
+                    itr_date = get_next_month_start_date(itr_date, 1)
 
         print("Done")
