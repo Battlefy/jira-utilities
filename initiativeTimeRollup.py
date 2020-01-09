@@ -19,6 +19,13 @@ class MonthWorkload:
     summed_time: float
     remaining_time: float
 
+    def dict(self):
+        epics_json = []
+        for epic in self.epics:
+            epics_json.append(epic.dict())
+
+        return {'summed_time': self.summed_time, 'remaining_time': self.remaining_time, 'epics': epics_json}
+
 
 @dataclass
 class Initiative:
@@ -72,6 +79,22 @@ def get_current_month_end_date(current_date, end_bound_date):
         return end_bound_date
     else:
         return datetime.datetime(current_date.year, current_date.month, calendar.monthrange(current_date.year, current_date.month)[1])
+
+
+def export_capacity_calendar(root, month_distributions):
+    months_json = {}
+    for month_key in month_distributions:
+        months_json[month_key] = month_distributions[month_key].dict()
+
+    out_file_path = os.path.join(
+        root, "Calendar_estimates.json")
+
+    with open(out_file_path, "w") as output_file:
+        print("Writing file {}".format(out_file_path))
+        output_file.writelines(json.dumps(
+            months_json, indent=4, separators=(",", ": ")))
+
+    print("Finished writing to file.")
 
 
 def export_initiatives_json(root, initiatives_container):
@@ -261,8 +284,28 @@ def execute(args_list):
         print("Calculating calendar rooted capacity demand...")
         for initiative in initiatives_container:
             for epic in initiative.epics:
+                initiative_start_date_object = None
+                initiative_end_date_object = None
                 start_date_object = None
                 end_date_object = None
+
+                # confirm we have an initiative start date; if we don't have that all bets are off anyways
+                # check start date of epic; if we don't have that, we yield to the start date of the initiative
+                # if we do have it, we still need to sanity check that the epic doesn't start before the initiatve; if so assume the start date is the
+                # initiative.
+                # if we don't have that, we set the start date to the same month as the end_date
+                if getattr(initiative.initiative.fields, START_DATE_KEY) is None:
+                    skipped_epics.append(epic)
+                    continue
+                else:
+                    initiative_start_date_object = datetime.datetime.strptime(
+                        getattr(initiative.initiative.fields, START_DATE_KEY), "%Y-%m-%d")
+
+                if getattr(epic.epic.fields, START_DATE_KEY) is not None:
+                    start_date_object = datetime.datetime.strptime(
+                        getattr(epic.epic.fields, START_DATE_KEY), "%Y-%m-%d")
+                    if start_date_object < initiative_start_date_object:
+                        start_date_object = initiative_start_date_object
 
                 if epic.epic.fields.duedate is not None:
                     end_date_object = datetime.datetime.strptime(
@@ -274,10 +317,7 @@ def execute(args_list):
                     skipped_epics.append(epic)
                     continue
 
-                if getattr(epic.epic.fields, START_DATE_KEY) is not None:
-                    start_date_object = datetime.datetime.strptime(
-                        getattr(epic.epic.fields, START_DATE_KEY), "%Y-%m-%d")
-                else:
+                if getattr(epic.epic.fields, START_DATE_KEY) is None:
                     start_date_object = datetime.datetime(
                         end_date_object.year, end_date_object.month, end_date_object.day)
 
@@ -298,8 +338,8 @@ def execute(args_list):
                     if month_distribution_key not in month_distributions:
                         month_distributions[month_distribution_key] = MonthWorkload(
                             itr_date.month, [], 0.0, 0.0)
-                        month_distributions[month_distribution_key].epics.append(
-                            epic)
+                    month_distributions[month_distribution_key].epics.append(
+                        epic)
 
                     month_distributions[month_distribution_key].summed_time += round(float(
                         epic.summed_time * (micro_delta_days / total_delta_days)), 2)
@@ -318,4 +358,7 @@ def execute(args_list):
                         epic.remaining_time * (micro_delta_days / summed_calc_total_delta_days)), 2)
                     itr_date = get_next_month_start_date(itr_date, 1)
 
-        print("Done")
+        # serialize calendar plan
+        export_capacity_calendar(
+            args.export_estimates_path, month_distributions)
+        print("Calendar render complete.")
