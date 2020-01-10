@@ -369,10 +369,10 @@ def execute(args_list):
                     # remaining time is only pertinent for the section of time after today()
                     if (itr_date < datetime.datetime.today()):
                         # adjust for the case where we are currently calculating this month, wherein we want to provide some partial
-                        # counting
+                        # counting; if end_date < today, we are over and all work must be done.
                         if (itr_date.month == datetime.datetime.today().month) and (itr_date.year == datetime.datetime.today().year):
                             micro_delta_days = (
-                                end_date - datetime.datetime.today()).days + 1 if (end_date - datetime.datetime.today()).days > 0 else 1
+                                end_date - datetime.datetime.today()).days + 1 if (end_date - datetime.datetime.today()).days > 0 else summed_calc_total_delta_days
                         else:
                             micro_delta_days = 0
 
