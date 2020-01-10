@@ -13,18 +13,40 @@ from subprocess import Popen
 
 
 @dataclass
+class EpicIntervalCommitment:
+    initiativeSummary: str
+    epicSummary: str
+    time: float
+
+    def dict(self):
+        return {'initiative_summary': self.initiativeSummary, 'epic_summary': self.epicSummary, 'proportional_time_commitment': self.time}
+
+
+@dataclass
 class MonthWorkload:
     month: int
     epics: []
-    summed_time: float
-    remaining_time: float
+    summed_time: []
+    remaining_time: []
 
     def dict(self):
         epics_json = []
         for epic in self.epics:
             epics_json.append(epic.dict())
 
-        return {'summed_time': self.summed_time, 'remaining_time': self.remaining_time, 'epics': epics_json}
+        summed_time_json = []
+        summed_time_summary = 0.0
+        for summed_time_local in self.summed_time:
+            summed_time_json.append(summed_time_local.dict())
+            summed_time_summary += summed_time_local.time
+
+        remaining_time_json = []
+        remaining_time_summary = 0.0
+        for remaining_time_local in self.remaining_time:
+            remaining_time_json.append(remaining_time_local.dict())
+            remaining_time_summary += remaining_time_local.time
+
+        return {'summed_time_summary': summed_time_summary, 'remaining_time_summary': remaining_time_summary, 'summed_time': summed_time_json, 'remaining_time': remaining_time_json, 'epics': epics_json}
 
 
 @dataclass
@@ -337,12 +359,12 @@ def execute(args_list):
                         itr_date.year)+"-"+str(itr_date.month)
                     if month_distribution_key not in month_distributions:
                         month_distributions[month_distribution_key] = MonthWorkload(
-                            itr_date.month, [], 0.0, 0.0)
+                            itr_date.month, [], [], [])
                     month_distributions[month_distribution_key].epics.append(
                         epic)
 
-                    month_distributions[month_distribution_key].summed_time += round(float(
-                        epic.summed_time * (micro_delta_days / total_delta_days)), 2)
+                    month_distributions[month_distribution_key].summed_time.append(EpicIntervalCommitment(initiative.initiative.fields.summary, epic.epic.fields.summary, round(float(
+                        epic.summed_time * (micro_delta_days / total_delta_days)), 2)))
 
                     # remaining time is only pertinent for the section of time after today()
                     if (itr_date < datetime.datetime.today()):
@@ -350,12 +372,12 @@ def execute(args_list):
                         # counting
                         if (itr_date.month == datetime.datetime.today().month) and (itr_date.year == datetime.datetime.today().year):
                             micro_delta_days = (
-                                end_date - datetime.datetime.today()).days + 1 if (end_date - datetime.datetime.today()).days >= 0 else 0
+                                end_date - datetime.datetime.today()).days + 1 if (end_date - datetime.datetime.today()).days > 0 else 1
                         else:
                             micro_delta_days = 0
 
-                    month_distributions[month_distribution_key].remaining_time += round(float(
-                        epic.remaining_time * (micro_delta_days / summed_calc_total_delta_days)), 2)
+                    month_distributions[month_distribution_key].remaining_time.append(EpicIntervalCommitment(initiative.initiative.fields.summary, epic.epic.fields.summary, round(float(
+                        epic.remaining_time * (micro_delta_days / summed_calc_total_delta_days)), 2)))
                     itr_date = get_next_month_start_date(itr_date, 1)
 
         # serialize calendar plan
