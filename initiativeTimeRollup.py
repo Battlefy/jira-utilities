@@ -57,6 +57,9 @@ class Initiative:
     remaining_time: float
     incomplete_estimated_count: int
     incomplete_unestimated_count: int
+    estimation_confidence: float
+    story_point_weight: float
+    story_point_weight_ceiling: float
 
     def calculate_estimate_counts(self):
         self.incomplete_unestimated_count = 0
@@ -66,6 +69,31 @@ class Initiative:
             self.incomplete_estimated_count += epic.incomplete_estimated_count
             self.incomplete_unestimated_count += epic.incomplete_unestimated_count
 
+        self.estimation_confidence = 0 if self.incomplete_estimated_count == 0 and self.incomplete_unestimated_count == 0 else (
+            self.incomplete_estimated_count / (self.incomplete_estimated_count + self.incomplete_unestimated_count))
+        self.estimation_confidence = self.estimation_confidence * 100
+
+        story_point_average = 0 if self.incomplete_estimated_count == 0 else self.remaining_time / \
+            self.incomplete_estimated_count
+
+        if self.estimation_confidence != 0:
+            # weight in the distribution of story points
+            # if the average story points per ticket is <=story_point_weight (default 5)
+            # retain our weighting; if not, reduce confidence rating
+            # by at most story_point_weight_ceiling (default 80%)
+            if story_point_average < self.story_point_weight:
+                story_point_average = self.story_point_weight
+            elif story_point_average > self.story_point_weight_ceiling:
+                story_point_average = self.story_point_weight_ceiling
+
+            self.estimation_confidence *= (self.story_point_weight /
+                                           story_point_average)
+
+        if self.estimation_confidence > 95:
+            self.estimation_confidence = 95
+
+        self.estimation_confidence = round(self.estimation_confidence, 2)
+
     def dict(self):
         epic_json = []
         for epic in self.epics:
@@ -73,7 +101,7 @@ class Initiative:
 
         self.calculate_estimate_counts()
 
-        return {'key': self.initiative.key, 'summary': self.initiative.fields.summary, 'summed_time': self.summed_time, 'remaining_time': self.remaining_time, 'incomplete_estimated_count': self.incomplete_estimated_count, 'incomplete_unestimated_count': self.incomplete_unestimated_count, 'epics': epic_json}
+        return {'key': self.initiative.key, 'summary': self.initiative.fields.summary, 'summed_time': self.summed_time, 'remaining_time': self.remaining_time, 'incomplete_estimated_count': self.incomplete_estimated_count, 'incomplete_unestimated_count': self.incomplete_unestimated_count, 'estimation_confidence': self.estimation_confidence, 'epics': epic_json}
 
 
 def diff_month(d1, d2):
@@ -252,7 +280,7 @@ def execute(args_list):
             new_args) if len(filtered_keys) != 0 else []
 
         curr_initiative = Initiative(
-            initiative_issue, epics_container, 0.0, 0.0, 0, 0)
+            initiative_issue, epics_container, 0.0, 0.0, 0, 0, 0.0, args.story_point_weight, args.story_point_weight_ceiling)
 
         for epic in epics_container:
             curr_initiative.summed_time += epic.summed_time
@@ -265,34 +293,12 @@ def execute(args_list):
         for initiative in initiatives_container:
             initiative.calculate_estimate_counts()
 
-            ratio = 0 if initiative.incomplete_estimated_count == 0 and initiative.incomplete_unestimated_count == 0 else (
-                initiative.incomplete_estimated_count / (initiative.incomplete_estimated_count + initiative.incomplete_unestimated_count))
-            ratio = ratio * 100
-
-            story_point_average = 0 if initiative.incomplete_estimated_count == 0 else initiative.remaining_time / \
-                initiative.incomplete_estimated_count
-
-            if ratio != 0:
-                # weight in the distribution of story points
-                # if the average story points per ticket is <=story_point_weight (default 5)
-                # retain our weighting; if not, reduce confidence rating
-                # by at most story_point_weight_ceiling (default 80%)
-                if story_point_average < args.story_point_weight:
-                    story_point_average = args.story_point_weight
-                elif story_point_average > args.story_point_weight_ceiling:
-                    story_point_average = args.story_point_weight_ceiling
-
-                ratio *= (args.story_point_weight/story_point_average)
-
-            if ratio > 95:
-                ratio = 95
-
             initiative.initiative.update(fields={
                 INITIAL_TIME_KEY: initiative.summed_time})
             initiative.initiative.update(fields={
                 REMAINING_TIME_KEY: initiative.remaining_time})
             initiative.initiative.update(fields={
-                CONFIDENCE_INTERVAL_KEY: int(ratio)})
+                CONFIDENCE_INTERVAL_KEY: int(initiative.estimation_confidence)})
             initiative.initiative.update(fields={
                                          INCOMPLETE_ISSUE_COUNT_KEY: initiative.incomplete_estimated_count+initiative.incomplete_unestimated_count})
 
