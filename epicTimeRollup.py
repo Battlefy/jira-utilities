@@ -351,6 +351,14 @@ def execute(args_list):
                 else:
                     epic_container.incomplete_estimated_count += 1
 
+        if args.update_ticket_estimates:
+            project_constants = project_configs[epic_container.epic.fields.project.id]
+            val = getattr(epic_container.epic.fields,
+                          project_constants.epic.estimation_key)
+            max_value = val if epic_container.summed_time == 0 or epic_container.summed_time == 0.0 else epic_container.summed_time
+            epic_container.epic.update(
+                fields={project_constants.epic.estimation_key: max_value})
+
     if args.export_estimates:
         export_epics_json(args.export_estimates_path, epics_container)
 
