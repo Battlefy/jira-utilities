@@ -257,34 +257,49 @@ def execute(args_list):
         print("Obtaining roll-up for {}".format(initiative))
         initiative_issue = jira.issue(initiative)
         keys = [
-            x.inwardIssue.key for x in initiative_issue.fields.issuelinks if 'FRONT' not in x.inwardIssue.key]
+            x.inwardIssue.key for x in initiative_issue.fields.issuelinks if 'FRONT' not in x.inwardIssue.key and 'SALES' not in x.inwardIssue.key]
         filtered_keys = []
+        curr_initiative = None
 
-        if args.filter_month == True:
-            for epic_key in keys:
-                epic_pre_add = jira.issue(epic_key)
-                if epic_pre_add.fields.duedate is not None:
-                    date_object = datetime.datetime.strptime(
-                        epic_pre_add.fields.duedate, "%Y-%m-%d")
-                    if str(date_object.month) in args.filter_month_numbers:
-                        filtered_keys.append(epic_key)
-                else:
-                    # if no due date, just include
-                    filtered_keys.append(epic_key)
+        if initiative_issue.fields.status.name == 'Done':
+            continue
+
+        if initiative_issue.fields.status.name == 'Initial Estimation':
+
+            estimate = getattr(initiative_issue.fields, INITIAL_TIME_KEY)
+            epic = epicTimeRollup.Epic(
+                initiative_issue, [], estimate, estimate, 1, 1)
+            curr_initiative = Initiative(
+                initiative_issue, [epic], 0.0, 0.0, 0, 0, 0.0, args.story_point_weight, args.story_point_weight_ceiling)
+
+            curr_initiative.remaining_time = estimate
+            curr_initiative.summed_time = estimate
         else:
-            filtered_keys.extend(keys)
+            if args.filter_month == True:
+                for epic_key in keys:
+                    epic_pre_add = jira.issue(epic_key)
+                    if epic_pre_add.fields.duedate is not None:
+                        date_object = datetime.datetime.strptime(
+                            epic_pre_add.fields.duedate, "%Y-%m-%d")
+                        if str(date_object.month) in args.filter_month_numbers:
+                            filtered_keys.append(epic_key)
+                    else:
+                        # if no due date, just include
+                        filtered_keys.append(epic_key)
+            else:
+                filtered_keys.extend(keys)
 
-        new_args = create_epic_rollup_args(
-            args_list, initiative, filtered_keys)
-        epics_container = epicTimeRollup.execute(
-            new_args) if len(filtered_keys) != 0 else []
+            new_args = create_epic_rollup_args(
+                args_list, initiative, filtered_keys)
+            epics_container = epicTimeRollup.execute(
+                new_args) if len(filtered_keys) != 0 else []
 
-        curr_initiative = Initiative(
-            initiative_issue, epics_container, 0.0, 0.0, 0, 0, 0.0, args.story_point_weight, args.story_point_weight_ceiling)
+            curr_initiative = Initiative(
+                initiative_issue, epics_container, 0.0, 0.0, 0, 0, 0.0, args.story_point_weight, args.story_point_weight_ceiling)
 
-        for epic in epics_container:
-            curr_initiative.summed_time += epic.summed_time
-            curr_initiative.remaining_time += epic.remaining_time
+            for epic in epics_container:
+                curr_initiative.summed_time += epic.summed_time
+                curr_initiative.remaining_time += epic.remaining_time
 
         initiatives_container.append(curr_initiative)
 
