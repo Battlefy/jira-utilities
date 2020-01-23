@@ -266,7 +266,7 @@ def execute(args_list):
 
         if initiative_issue.fields.status.name == 'Initial Estimation':
 
-            estimate = getattr(initiative_issue.fields, INITIAL_TIME_KEY)
+            estimate = getattr(initiative_issue.fields, INITIAL_TIME_KEY)312
             epic = epicTimeRollup.Epic(
                 initiative_issue, [], estimate, estimate, 1, 1)
             curr_initiative = Initiative(
@@ -306,6 +306,7 @@ def execute(args_list):
     if args.update_initiative_estimates:
         # update the SP estimate on the initiatives
         for initiative in initiatives_container:
+            print("Updating initiative: {}".format(initiative.initiative.key))
             initiative.calculate_estimate_counts()
 
             initiative.initiative.update(fields={
