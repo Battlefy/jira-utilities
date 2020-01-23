@@ -266,7 +266,7 @@ def execute(args_list):
 
         if initiative_issue.fields.status.name == 'Initial Estimation':
 
-            estimate = getattr(initiative_issue.fields, INITIAL_TIME_KEY)312
+            estimate = getattr(initiative_issue.fields, INITIAL_TIME_KEY)
             epic = epicTimeRollup.Epic(
                 initiative_issue, [], estimate, estimate, 1, 1)
             curr_initiative = Initiative(
