@@ -339,7 +339,7 @@ def execute(args_list):
                 # confirm we have an initiative start date; if we don't have that all bets are off anyways
                 # check start date of epic; if we don't have that, we yield to the start date of the initiative
                 # if we do have it, we still need to sanity check that the epic doesn't start before the initiatve; if so assume the start date is the
-                # initiative.
+                # initiative.5
                 # if we don't have that, we set the start date to the same month as the end_date
                 if getattr(initiative.initiative.fields, START_DATE_KEY) is None:
                     skipped_epics.append(epic)
@@ -397,7 +397,7 @@ def execute(args_list):
                         # counting; if end_date < today, we are over and all work must be done.
                         if (itr_date.month == datetime.datetime.today().month) and (itr_date.year == datetime.datetime.today().year):
                             micro_delta_days = (
-                                end_date - datetime.datetime.today()).days + 1 if (end_date - datetime.datetime.today()).days > 0 else summed_calc_total_delta_days
+                                end_date - datetime.datetime.today()).days + 1 if (end_date_object - datetime.datetime.today()).days > 0 else summed_calc_total_delta_days
                         else:
                             micro_delta_days = 0
 
