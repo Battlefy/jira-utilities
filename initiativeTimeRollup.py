@@ -256,8 +256,9 @@ def execute(args_list):
     for initiative in initiatives:
         print("Obtaining roll-up for {}".format(initiative))
         initiative_issue = jira.issue(initiative)
+
         keys = [
-            x.inwardIssue.key for x in initiative_issue.fields.issuelinks if 'FRONT' not in x.inwardIssue.key and 'SALES' not in x.inwardIssue.key]
+            x.inwardIssue.key for x in initiative_issue.fields.issuelinks if hasattr(x, 'inwardIssue') and 'FRONT' not in x.inwardIssue.key and 'SALES' not in x.inwardIssue.key]
         filtered_keys = []
         curr_initiative = None
 
@@ -278,6 +279,8 @@ def execute(args_list):
             if args.filter_month == True:
                 for epic_key in keys:
                     epic_pre_add = jira.issue(epic_key)
+                    if epic_pre_add.fields.status == 'Done':
+                        continue
                     if epic_pre_add.fields.duedate is not None:
                         date_object = datetime.datetime.strptime(
                             epic_pre_add.fields.duedate, "%Y-%m-%d")
