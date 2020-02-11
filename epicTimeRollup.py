@@ -245,6 +245,7 @@ def extract_issue_estimate(jira, epic_sub_issue, project_constants, update_ticke
             val = getattr(epic_sub_issue.issue.fields,
                           project_constants.story.estimation_key)
             max_value = val if epic_sub_issue.summed_time == 0 or epic_sub_issue.summed_time == 0.0 else epic_sub_issue.summed_time
+            epic_sub_issue.summed_time = max_value if max_value is not None else 0.0
             epic_sub_issue.issue.update(
                 fields={project_constants.story.estimation_key: max_value})
     return epic_sub_issue.summed_time

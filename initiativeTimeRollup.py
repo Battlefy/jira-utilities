@@ -266,7 +266,6 @@ def execute(args_list):
             continue
 
         if initiative_issue.fields.status.name == 'Initial Estimation':
-
             estimate = getattr(initiative_issue.fields, INITIAL_TIME_KEY)
             epic = epicTimeRollup.Epic(
                 initiative_issue, [], estimate, estimate, 1, 1)
@@ -400,6 +399,7 @@ def execute(args_list):
                                 end_date - datetime.datetime.today()).days + 1 if (end_date_object - datetime.datetime.today()).days > 0 else summed_calc_total_delta_days
                         else:
                             micro_delta_days = 0
+                            # if this is the last loop, and the nested epic is over, we need to just frontload the entire remaining work into next month
 
                     month_distributions[month_distribution_key].remaining_time.append(EpicIntervalCommitment(initiative.initiative.fields.summary, epic.epic.fields.summary, round(float(
                         epic.remaining_time * (micro_delta_days / summed_calc_total_delta_days)), 2)))
