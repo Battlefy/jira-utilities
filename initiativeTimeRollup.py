@@ -8,6 +8,8 @@ import math
 import calendar
 import shutil
 import json
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 from jira import JIRA
 from subprocess import Popen
 
@@ -183,7 +185,8 @@ def parse_args(args_list):
     parser = argparse.ArgumentParser()
     parser.add_argument("--user", required=True)
     parser.add_argument("--api_token", required=True)
-    parser.add_argument("--initiatives", required=True)
+    parser.add_argument("--auto_initiatives", action='store_true')
+    parser.add_argument("--initiatives")
     parser.add_argument("--update_ticket_estimates", action='store_true')
     parser.add_argument("--force_toplevel_recalculate", action='store_true')
     parser.add_argument("--export_estimates", action='store_true')
@@ -196,6 +199,8 @@ def parse_args(args_list):
     parser.add_argument("--import_project_configs_path")
     parser.add_argument("--filter_month", action='store_true')
     parser.add_argument("--filter_month_numbers")
+    parser.add_argument("--update_sheets", action='store_true')
+    parser.add_argument("--sheets_service_auth_file")
     parser.add_argument("--update_initiative_estimates", action='store_true')
     parser.add_argument("--create_calendar_schedule", action='store_true')
 
@@ -209,13 +214,32 @@ def parse_args(args_list):
         else:
             args.filter_month_numbers = args.filter_month_numbers.split(",")
 
+    # If we do not provide auto_initiatives, we must provide a list of specific initiatives to exercise.
+    if args.auto_initiatives == False:
+        if args.initiatives is None:
+            argparse.ArgumentError(
+                "User did not provided --auto_initiatives option but also did not provide --initiatives")
+            sys.exit(-3)
+    else:
+        args.initiatives = None
+
+    if args.update_sheets == True:
+        if args.sheets_service_auth_file is None:
+            argparse.ArgumentError(
+                "User provided --update_sheets option but did not provide --sheets_service_auth_file")
+            sys.exit(-4)
+
     return args
 
 
 def create_epic_rollup_args(source_args, initiative, epics):
     epic_rollup_args = source_args.copy()
+    idx = -1
 
-    idx = epic_rollup_args.index('--initiatives')
+    if "--initiatives" in epic_rollup_args:
+        idx = epic_rollup_args.index('--initiatives')
+    elif "--auto_initiatives" in epic_rollup_args:
+        idx = epic_rollup_args.index('--auto_initiatives')
 
     if(idx > -1):
         del epic_rollup_args[idx]
@@ -250,7 +274,13 @@ def execute(args_list):
         basic_auth=(args.user, args.api_token),
     )
 
-    initiatives = args.initiatives.split(",")
+    if args.initiatives is not None:
+        initiatives = args.initiatives.split(",")
+    elif args.auto_initiatives:
+        query_string = "project=FRONT and type=Epic and id!=Front-15"
+        initiatives = list(
+            set([e.key for e in jira.search_issues(query_string)]))
+
     initiatives_container = []
 
     for initiative in initiatives:
@@ -324,8 +354,9 @@ def execute(args_list):
         export_initiatives_json(
             args.export_estimates_path, initiatives_container)
 
+    month_distributions = {}
+
     if args.create_calendar_schedule:
-        month_distributions = {}
         skipped_epics = []
         print("Calculating calendar rooted capacity demand...")
         for initiative in initiatives_container:
@@ -409,3 +440,36 @@ def execute(args_list):
         export_capacity_calendar(
             args.export_estimates_path, month_distributions)
         print("Calendar render complete.")
+
+    if args.update_sheets:
+        print("Updating the google sheet...")
+        scope = ['https://spreadsheets.google.com/feeds',
+                 'https://www.googleapis.com/auth/drive']
+        credentials = ServiceAccountCredentials.from_json_keyfile_name(
+            args.sheets_service_auth_file, scope)
+        gc = gspread.authorize(credentials)
+        spreadsheet_instance = gc.open_by_url(
+            "https://docs.google.com/spreadsheets/d/1NvyO1Wj-cCMEGwHpPkFgGl14Kdpmz2QR8NDNx18FBAo/edit?usp=sharing")
+        alloc = spreadsheet_instance.sheet1
+        root_cell_row = 50
+        root_cell_col = 'H'
+
+        years = [2020, 2021]
+        months = list(range(1, 13))
+        counter = 0
+
+        for year in years:
+            for month in months:
+                new_row = root_cell_row + counter
+                new_cell = '{}{}'.format(root_cell_col, new_row)
+                month_distribution_key = '{}-{}'.format(year, month)
+
+                if month_distribution_key in month_distributions:
+                    ret_dict = month_distributions[month_distribution_key].dict(
+                    )
+                    alloc.update_acell(
+                        new_cell, ret_dict['remaining_time_summary'])
+
+                counter += 1
+        alloc.update_acell('G49', 'Updated On: {}'.format(
+            datetime.datetime.today()))
