@@ -64,10 +64,14 @@ class Initiative:
     story_point_weight_ceiling: float
 
     def calculate_estimate_counts(self):
+        self.summed_time = 0
+        self.remaining_time = 0
         self.incomplete_unestimated_count = 0
         self.incomplete_estimated_count = 0
 
         for epic in self.epics:
+            self.summed_time += epic.summed_time
+            self.remaining_time += epic.remaining_time
             self.incomplete_estimated_count += epic.incomplete_estimated_count
             self.incomplete_unestimated_count += epic.incomplete_unestimated_count
 
@@ -97,11 +101,11 @@ class Initiative:
         self.estimation_confidence = round(self.estimation_confidence, 2)
 
     def dict(self):
+        self.calculate_estimate_counts()
+
         epic_json = []
         for epic in self.epics:
             epic_json.append(epic.dict())
-
-        self.calculate_estimate_counts()
 
         return {'key': self.initiative.key, 'summary': self.initiative.fields.summary, 'summed_time': self.summed_time, 'remaining_time': self.remaining_time, 'incomplete_estimated_count': self.incomplete_estimated_count, 'incomplete_unestimated_count': self.incomplete_unestimated_count, 'estimation_confidence': self.estimation_confidence, 'epics': epic_json}
 
@@ -197,22 +201,13 @@ def parse_args(args_list):
     parser.add_argument("--story_point_weight", default=5)
     parser.add_argument("--story_point_weight_ceiling", default=25)
     parser.add_argument("--import_project_configs_path")
-    parser.add_argument("--filter_month", action='store_true')
-    parser.add_argument("--filter_month_numbers")
+
     parser.add_argument("--update_sheets", action='store_true')
     parser.add_argument("--sheets_service_auth_file")
     parser.add_argument("--update_initiative_estimates", action='store_true')
     parser.add_argument("--create_calendar_schedule", action='store_true')
 
     args = parser.parse_args(args=args_list)
-
-    if args.filter_month == True:
-        if args.filter_month_numbers is None:
-            argparse.ArgumentError(
-                "User provided --filter_month option but did not provide --filter_month_numbers")
-            sys.exit(-2)
-        else:
-            args.filter_month_numbers = args.filter_month_numbers.split(",")
 
     # If we do not provide auto_initiatives, we must provide a list of specific initiatives to exercise.
     if args.auto_initiatives == False:
@@ -259,6 +254,30 @@ def create_epic_rollup_args(source_args, initiative, epics):
     return epic_rollup_args
 
 
+def calculate_initial_estimation(initiative_issue, initial_time_key, story_point_weight, story_point_weight_ceiling):
+    estimate = getattr(initiative_issue.fields, initial_time_key)
+    epic = epicTimeRollup.Epic(
+        initiative_issue, [], estimate, estimate, 1, 1)
+    curr_initiative = Initiative(
+        initiative_issue, [epic], 0.0, 0.0, 0, 0, 0.0, story_point_weight, story_point_weight_ceiling)
+
+    curr_initiative.remaining_time = estimate
+    curr_initiative.summed_time = estimate
+    return curr_initiative
+
+
+def calculate_estimation(args_list, initiative, filtered_keys, initiative_issue, story_point_weight, story_point_weight_ceiling):
+    new_args = create_epic_rollup_args(
+        args_list, initiative, filtered_keys)
+    epics_container = epicTimeRollup.execute(
+        new_args) if len(filtered_keys) != 0 else []
+
+    curr_initiative = Initiative(
+        initiative_issue, epics_container, 0.0, 0.0, 0, 0, 0.0, story_point_weight, story_point_weight_ceiling)
+
+    return curr_initiative
+
+
 def execute(args_list):
     args = parse_args(args_list)
     INITIAL_TIME_KEY = "customfield_11609"
@@ -296,42 +315,13 @@ def execute(args_list):
             continue
 
         if initiative_issue.fields.status.name == 'Initial Estimation':
-            estimate = getattr(initiative_issue.fields, INITIAL_TIME_KEY)
-            epic = epicTimeRollup.Epic(
-                initiative_issue, [], estimate, estimate, 1, 1)
-            curr_initiative = Initiative(
-                initiative_issue, [epic], 0.0, 0.0, 0, 0, 0.0, args.story_point_weight, args.story_point_weight_ceiling)
-
-            curr_initiative.remaining_time = estimate
-            curr_initiative.summed_time = estimate
+            curr_initiative = calculate_initial_estimation(
+                initiative_issue, INITIAL_TIME_KEY, args.story_point_weight, args.story_point_weight_ceiling)
         else:
-            if args.filter_month == True:
-                for epic_key in keys:
-                    epic_pre_add = jira.issue(epic_key)
-                    if epic_pre_add.fields.status == 'Done':
-                        continue
-                    if epic_pre_add.fields.duedate is not None:
-                        date_object = datetime.datetime.strptime(
-                            epic_pre_add.fields.duedate, "%Y-%m-%d")
-                        if str(date_object.month) in args.filter_month_numbers:
-                            filtered_keys.append(epic_key)
-                    else:
-                        # if no due date, just include
-                        filtered_keys.append(epic_key)
-            else:
-                filtered_keys.extend(keys)
-
-            new_args = create_epic_rollup_args(
-                args_list, initiative, filtered_keys)
-            epics_container = epicTimeRollup.execute(
-                new_args) if len(filtered_keys) != 0 else []
-
-            curr_initiative = Initiative(
-                initiative_issue, epics_container, 0.0, 0.0, 0, 0, 0.0, args.story_point_weight, args.story_point_weight_ceiling)
-
-            for epic in epics_container:
-                curr_initiative.summed_time += epic.summed_time
-                curr_initiative.remaining_time += epic.remaining_time
+            filtered_keys.extend(keys)
+            curr_initiative = calculate_estimation(
+                args_list, initiative, filtered_keys, initiative_issue, args.story_point_weight, args.story_point_weight_ceiling)
+            curr_initiative.dict()
 
         initiatives_container.append(curr_initiative)
 

@@ -36,8 +36,22 @@ class Epic:
     incomplete_estimated_count: int
     incomplete_unestimated_count: int
 
+    def add_issues(self, jira, project_configs, update_ticket_estimates, force_toplevel_recalculate, new_issues):
+        for issue in new_issues:
+            extract_issue_estimate(
+                jira, issue, project_configs[self.epic.fields.project.id], update_ticket_estimates, force_toplevel_recalculate)
+
+            self.summed_time += issue.summed_time
+            if issue.issue.fields.status.name != "Done":
+                self.remaining_time += issue.summed_time
+                if issue.summed_time <= 0.0:
+                    self.incomplete_unestimated_count += 1
+                else:
+                    self.incomplete_estimated_count += 1
+
     def dict(self):
         issues_json = []
+
         for issue in self.issues:
             di = issue.dict()
             issues_json.append(issue.dict())
@@ -213,47 +227,64 @@ def extract_issue_estimate(jira, epic_sub_issue, project_constants, update_ticke
 
     unestimated_subtasks = []
 
-   # Can check to see whether this is a task or user story in type; if task just try to obtain time
+    # If it's a task, there is no further roll-up
     if epic_sub_issue.issue.fields.issuetype.id == project_constants.task.type_id:
         if hasattr(epic_sub_issue.issue.fields, project_constants.task.estimation_key) and getattr(epic_sub_issue.issue.fields, project_constants.task.estimation_key) is not None:
             epic_sub_issue.summed_time += float(
                 getattr(epic_sub_issue.issue.fields, project_constants.task.estimation_key))
+    # If it's a story, we have two cases:
+    # 1) There is already a roll-up/estimate at the user-story level
+    # 2) There is no roll-up/estimate at the user-story level
     elif epic_sub_issue.issue.fields.issuetype.id == project_constants.story.type_id:
-        # Early out if story has estimate
-        if not force_toplevel_recalculate and getattr(epic_sub_issue.issue.fields, project_constants.story.estimation_key) is not None:
+        if (force_toplevel_recalculate and len(epic_sub_issue.subtasks) > 0) or getattr(epic_sub_issue.issue.fields, project_constants.story.estimation_key) is None:
+            for subtask in epic_sub_issue.subtasks:
+                fetched = jira.issue(
+                    subtask.key,
+                    fields="{}, subtasks, issuetype".format(
+                        project_constants.story.estimation_key),
+                )
+
+                if (
+                    hasattr(fetched.fields,
+                            project_constants.story.estimation_key)
+                    and getattr(fetched.fields, project_constants.story.estimation_key) is not None
+                ):
+                    epic_sub_issue.summed_time += float(
+                        getattr(fetched.fields, project_constants.story.estimation_key))
+                else:
+                    unestimated_subtasks.append(fetched.key)
+
+            if update_ticket_estimates:
+                # We want to make sure that we aren't flattening 'user story level estimates' with sub-task roll-up if that is not
+                # how teams are estimating. So if summed_time is 0.0, just yield to what's there already.
+                val = getattr(epic_sub_issue.issue.fields,
+                              project_constants.story.estimation_key)
+                max_value = val if epic_sub_issue.summed_time == 0 or epic_sub_issue.summed_time == 0.0 else epic_sub_issue.summed_time
+                epic_sub_issue.summed_time = max_value if max_value is not None else 0.0
+                epic_sub_issue.issue.update(
+                    fields={project_constants.story.estimation_key: max_value})
+        else:
             epic_sub_issue.summed_time += float(
                 getattr(epic_sub_issue.issue.fields, project_constants.story.estimation_key))
-            return epic_sub_issue.summed_time
-        for subtask in epic_sub_issue.subtasks:
-            fetched = jira.issue(
-                subtask.key,
-                fields="{}, subtasks, issuetype".format(
-                    project_constants.story.estimation_key),
-            )
 
-            if (
-                hasattr(fetched.fields, project_constants.story.estimation_key)
-                and getattr(fetched.fields, project_constants.story.estimation_key) is not None
-            ):
-                epic_sub_issue.summed_time += float(
-                    getattr(fetched.fields, project_constants.story.estimation_key))
-            else:
-                unestimated_subtasks.append(fetched.key)
-        if update_ticket_estimates:
-            # We want to make sure that we aren't flattening 'user story level estimates' with sub-task roll-up if that is not
-            # how teams are estimating. So if summed_time is 0.0, just yield to what's there already.
-            val = getattr(epic_sub_issue.issue.fields,
-                          project_constants.story.estimation_key)
-            max_value = val if epic_sub_issue.summed_time == 0 or epic_sub_issue.summed_time == 0.0 else epic_sub_issue.summed_time
-            epic_sub_issue.summed_time = max_value if max_value is not None else 0.0
-            epic_sub_issue.issue.update(
-                fields={project_constants.story.estimation_key: max_value})
-    return epic_sub_issue.summed_time
+
+def update_ticket_estimates(epic_containers, project_configs):
+    """
+        epic_containers - list of epics which we want to update the toplevel estimates.
+        project_configs - dictionary of jira project configurations used to update the jira estimates.
+    """
+    for epic_container in epic_containers:
+        project_constants = project_configs[epic_container.epic.fields.project.id]
+        val = getattr(epic_container.epic.fields,
+                      project_constants.epic.estimation_key)
+        max_value = val if epic_container.summed_time == 0 or epic_container.summed_time == 0.0 else epic_container.summed_time
+        epic_container.epic.update(
+            fields={project_constants.epic.estimation_key: max_value})
 
 
 def export_epics_json(root, epics_container):
     """
-        file - fully qualified path to file in which to write to.
+        root - fully qualified path to folder in which to write to.
         epics_container - the list of epic DataObjects to export as JSON.
     """
     projects_json = {}
@@ -336,29 +367,14 @@ def execute(args_list):
                     )
                 )
             ]
-            epic_container.issues.extend(epic_issues)
+            epic_container.add_issues(
+                jira, project_configs, args.update_ticket_estimates, args.force_toplevel_recalculate, epic_issues)
+
         except Exception as e:
             print("Issue extracting child objects.")
 
-    for epic_container in epics_container:
-        for issue in epic_container.issues:
-            extract_issue_estimate(
-                jira, issue, project_configs[epic_container.epic.fields.project.id], args.update_ticket_estimates, args.force_toplevel_recalculate)
-            epic_container.summed_time += issue.summed_time
-            if issue.issue.fields.status.name != "Done":
-                epic_container.remaining_time += issue.summed_time
-                if issue.summed_time <= 0.0:
-                    epic_container.incomplete_unestimated_count += 1
-                else:
-                    epic_container.incomplete_estimated_count += 1
-
-        if args.update_ticket_estimates:
-            project_constants = project_configs[epic_container.epic.fields.project.id]
-            val = getattr(epic_container.epic.fields,
-                          project_constants.epic.estimation_key)
-            max_value = val if epic_container.summed_time == 0 or epic_container.summed_time == 0.0 else epic_container.summed_time
-            epic_container.epic.update(
-                fields={project_constants.epic.estimation_key: max_value})
+    if args.update_ticket_estimates:
+        update_ticket_estimates(epics_container, project_configs)
 
     if args.export_estimates:
         export_epics_json(args.export_estimates_path, epics_container)
