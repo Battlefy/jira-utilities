@@ -64,6 +64,9 @@ class Initiative:
     story_point_weight_ceiling: float
 
     def calculate_estimate_counts(self):
+        """
+            Used to recalculate all the calculated member variables of the class.
+        """
         self.summed_time = 0
         self.remaining_time = 0
         self.incomplete_unestimated_count = 0
@@ -111,10 +114,20 @@ class Initiative:
 
 
 def diff_month(d1, d2):
+    """
+        Calendar utility method to get the number months between two dates.
+        d1 - the first date to use.
+        d2 - the second date to use.
+    """
     return (d1.year - d2.year) * 12 + d1.month - d2.month
 
 
 def get_next_month_start_date(start_date, month_to_add):
+    """
+        Calendar utility method to get the next month start date given an initial date, and months to add.
+        start_date - The date to start calculations from.
+        month_to_add - The number of months to add to the start date.
+    """
     year = start_date.year
     month = start_date.month
     day = 1
@@ -131,6 +144,9 @@ def get_next_month_start_date(start_date, month_to_add):
 
 
 def get_current_month_end_date(current_date, end_bound_date):
+    """
+        Calendar utility to get the end date of the current month.
+    """
     if current_date.month == end_bound_date.month and end_bound_date.year == current_date.year:
         return end_bound_date
     else:
@@ -138,6 +154,11 @@ def get_current_month_end_date(current_date, end_bound_date):
 
 
 def export_capacity_calendar(root, month_distributions):
+    """
+        Used to generate a capacity calendar.
+        root - the root folder in which to place the output file.
+        month_distributions - List of data structures which contain the capacity roll-up.
+    """
     months_json = {}
     for month_key in month_distributions:
         months_json[month_key] = month_distributions[month_key].dict()
@@ -228,6 +249,12 @@ def parse_args(args_list):
 
 
 def create_epic_rollup_args(source_args, initiative, epics):
+    """
+        Creates arguments for epic script given source_args, the initaitive to execute it on, and list of epics.
+        source_args - arguments to use as passthrough
+        initiative - the initiative we are running the epic roll-up for
+        epics - the list of epics to calculate the rollup for.
+    """
     epic_rollup_args = source_args.copy()
     idx = -1
 
@@ -359,7 +386,7 @@ def execute(args_list):
                 # confirm we have an initiative start date; if we don't have that all bets are off anyways
                 # check start date of epic; if we don't have that, we yield to the start date of the initiative
                 # if we do have it, we still need to sanity check that the epic doesn't start before the initiatve; if so assume the start date is the
-                # initiative.5
+                # initiative.
                 # if we don't have that, we set the start date to the same month as the end_date
                 if getattr(initiative.initiative.fields, START_DATE_KEY) is None:
                     skipped_epics.append(epic)
