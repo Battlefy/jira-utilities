@@ -5,7 +5,7 @@ import json
 import sys
 import os
 
-### CONSTANTS - because we don't use JIRA classic ;) ###
+### Constants ###
 
 EPIC_NAME = "Epic"
 STORY_NAME = "Story"
@@ -37,6 +37,8 @@ class Epic:
     incomplete_unestimated_count: int
 
     def add_issues(self, jira, project_configs, update_ticket_estimates, force_toplevel_recalculate, new_issues):
+        """
+        """
         for issue in new_issues:
             extract_issue_estimate(
                 jira, issue, project_configs[self.epic.fields.project.id], update_ticket_estimates, force_toplevel_recalculate)
@@ -48,6 +50,7 @@ class Epic:
                     self.incomplete_unestimated_count += 1
                 else:
                     self.incomplete_estimated_count += 1
+        self.issues.extend(new_issues)
 
     def dict(self):
         issues_json = []
@@ -81,7 +84,6 @@ class ProjectConstants:
         return {'key': self.key, EPIC_NAME: self.epic.dict(), STORY_NAME: self.story.dict(), TASK_NAME: self.task.dict(), SUBTASK_NAME: self.subtask.dict(), BUG_NAME: self.bug.dict()}
 
 ### Methods ###
-
 
 def parse_args(args_list):
     """
@@ -125,6 +127,8 @@ def parse_args(args_list):
 
 def generate_project_constants(jira, project, load_from_file=False, configuration_folder_root=None):
     """
+        Generates a data struct that represents all of the const strings used for important jira Keys. The reasoning for doing this is between projects, there may be 
+        different custom field keys for any required fields (in our case, estimates).
         jira - the jira connection.
         project - the jira project.
         configuration_folder_root - fully qualified path of initialization file to use.
@@ -219,6 +223,7 @@ def generate_project_constants(jira, project, load_from_file=False, configuratio
 
 def extract_issue_estimate(jira, epic_sub_issue, project_constants, update_ticket_estimates=False, force_toplevel_recalculate=False):
     """
+        Extracts the issue estimate.
         jira - the jira connection.
         epic_sub_issue - the jira item to estimate.
         project_constants - project constants used to determine task type & customs.
@@ -259,7 +264,8 @@ def extract_issue_estimate(jira, epic_sub_issue, project_constants, update_ticke
                 # how teams are estimating. So if summed_time is 0.0, just yield to what's there already.
                 val = getattr(epic_sub_issue.issue.fields,
                               project_constants.story.estimation_key)
-                max_value = val if epic_sub_issue.summed_time == 0 or epic_sub_issue.summed_time == 0.0 else epic_sub_issue.summed_time
+                              #TODO - inspect whether this should be remaining
+                max_value = val if epic_sub_issue.summed_time == 0 else epic_sub_issue.summed_time
                 epic_sub_issue.summed_time = max_value if max_value is not None else 0.0
                 epic_sub_issue.issue.update(
                     fields={project_constants.story.estimation_key: max_value})
@@ -270,6 +276,7 @@ def extract_issue_estimate(jira, epic_sub_issue, project_constants, update_ticke
 
 def update_ticket_estimates(epic_containers, project_configs):
     """
+        Updates the actual jira issues to reflect the new estimates.
         epic_containers - list of epics which we want to update the toplevel estimates.
         project_configs - dictionary of jira project configurations used to update the jira estimates.
     """
@@ -284,6 +291,7 @@ def update_ticket_estimates(epic_containers, project_configs):
 
 def export_epics_json(root, epics_container):
     """
+        Exports the epics to json.
         root - fully qualified path to folder in which to write to.
         epics_container - the list of epic DataObjects to export as JSON.
     """
@@ -309,6 +317,11 @@ def export_epics_json(root, epics_container):
 
 
 def export_project_configs_json(root, project_configs_container):
+    """
+        Exports the project configs to JSON for later reuse.
+        root - Root folder in which to export the project configs to.
+        project_configs_container - The list of project configs.
+    """
     for project in project_configs_container:
         out_file_path = os.path.join(
             root, "{}_config.json".format(project_configs_container[project].key))
@@ -318,6 +331,7 @@ def export_project_configs_json(root, project_configs_container):
             output_file.writelines(json.dumps(
                 project_configs_container[project].dict(), indent=4, separators=(",", ": ")))
 
+### Main ###
 
 def execute(args_list):
     args = parse_args(args_list)

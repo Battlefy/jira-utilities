@@ -14,6 +14,17 @@ from jira import JIRA
 from subprocess import Popen
 
 
+### Constants ###
+
+INITIAL_TIME_KEY = "customfield_11609"
+REMAINING_TIME_KEY = "customfield_11639"
+CONFIDENCE_INTERVAL_KEY = "customfield_11641"
+INCOMPLETE_ISSUE_COUNT_KEY = "customfield_11642"
+START_DATE_KEY = "customfield_11600"
+
+
+### Data Structures ###
+
 @dataclass
 class EpicIntervalCommitment:
     initiativeSummary: str
@@ -112,6 +123,8 @@ class Initiative:
 
         return {'key': self.initiative.key, 'summary': self.initiative.fields.summary, 'summed_time': self.summed_time, 'remaining_time': self.remaining_time, 'incomplete_estimated_count': self.incomplete_estimated_count, 'incomplete_unestimated_count': self.incomplete_unestimated_count, 'estimation_confidence': self.estimation_confidence, 'epics': epic_json}
 
+### Methods ###
+
 
 def diff_month(d1, d2):
     """
@@ -146,6 +159,8 @@ def get_next_month_start_date(start_date, month_to_add):
 def get_current_month_end_date(current_date, end_bound_date):
     """
         Calendar utility to get the end date of the current month.
+        current_date - The current date from which we work from.
+        end_bound_date - The end date we want to clamp against.
     """
     if current_date.month == end_bound_date.month and end_bound_date.year == current_date.year:
         return end_bound_date
@@ -176,7 +191,8 @@ def export_capacity_calendar(root, month_distributions):
 
 def export_initiatives_json(root, initiatives_container):
     """
-        file - fully qualified path to file in which to write to.
+        Exports initiatives to json.
+        root - fully qualified path to folder in which to write to.
         initiatives_container - the list of initiative DataObjects to export as JSON.
     """
     initaitives_json = {}
@@ -219,10 +235,9 @@ def parse_args(args_list):
     parser.add_argument("--export_project_configs", action='store_true')
     parser.add_argument("--export_project_config_path")
     parser.add_argument("--import_project_configs", action='store_true')
+    parser.add_argument("--import_project_configs_path")
     parser.add_argument("--story_point_weight", default=5)
     parser.add_argument("--story_point_weight_ceiling", default=25)
-    parser.add_argument("--import_project_configs_path")
-
     parser.add_argument("--update_sheets", action='store_true')
     parser.add_argument("--sheets_service_auth_file")
     parser.add_argument("--update_initiative_estimates", action='store_true')
@@ -282,6 +297,14 @@ def create_epic_rollup_args(source_args, initiative, epics):
 
 
 def calculate_initial_estimation(initiative_issue, initial_time_key, story_point_weight, story_point_weight_ceiling):
+    """
+        Calculate the estimation for an initiative in 'Initial Estimation' status. This will ignore all roll-up, and take the Story Point Estimate from the 
+        initiative. 
+        initiative_issue - JIRA issue in which to calculate the estimate for.
+        initial_time_key - Custom Field Key for initial estimation.
+        story_point_weight - Weighted value to be used in calculating the confidence interval.
+        story_point_weight_ceiling - The max value to use for weighted story point calculations.
+    """
     estimate = getattr(initiative_issue.fields, initial_time_key)
     epic = epicTimeRollup.Epic(
         initiative_issue, [], estimate, estimate, 1, 1)
@@ -293,25 +316,31 @@ def calculate_initial_estimation(initiative_issue, initial_time_key, story_point
     return curr_initiative
 
 
-def calculate_estimation(args_list, initiative, filtered_keys, initiative_issue, story_point_weight, story_point_weight_ceiling):
+def calculate_estimation(args_list, filtered_keys, initiative_issue, story_point_weight, story_point_weight_ceiling):
+    """
+        Calculate the estimation for an initiative in 'Active Estimation', 'In Progress' status. This will calculate the complete roll-up for the epics.
+        args_list - Passthrough args to be sent to the epic rollup.
+        filtered_keys - The list of epics to perform a rollup against.
+        initiative_issue - JIRA issue in which to calculate the estimate for.
+        story_point_weight - Weighted value to be used in calculating the confidence interval.
+        story_point_weight_ceiling - The max value to use for weighted story point calculations.
+    """
     new_args = create_epic_rollup_args(
-        args_list, initiative, filtered_keys)
+        args_list, initiative_issue.key, filtered_keys)
     epics_container = epicTimeRollup.execute(
         new_args) if len(filtered_keys) != 0 else []
 
     curr_initiative = Initiative(
         initiative_issue, epics_container, 0.0, 0.0, 0, 0, 0.0, story_point_weight, story_point_weight_ceiling)
 
+    curr_initiative.calculate_estimate_counts()
     return curr_initiative
 
 
+### Main ###
+
 def execute(args_list):
     args = parse_args(args_list)
-    INITIAL_TIME_KEY = "customfield_11609"
-    REMAINING_TIME_KEY = "customfield_11639"
-    CONFIDENCE_INTERVAL_KEY = "customfield_11641"
-    INCOMPLETE_ISSUE_COUNT_KEY = "customfield_11642"
-    START_DATE_KEY = "customfield_11600"
 
     print("Running JIRA Tabulations for Initiatives")
     jira_options = {"server": "https://battlefy.atlassian.net"}
@@ -323,6 +352,7 @@ def execute(args_list):
     if args.initiatives is not None:
         initiatives = args.initiatives.split(",")
     elif args.auto_initiatives:
+        # FRONT-15 is the ops epic.
         query_string = "project=FRONT and type=Epic and id!=Front-15"
         initiatives = list(
             set([e.key for e in jira.search_issues(query_string)]))
@@ -347,8 +377,7 @@ def execute(args_list):
         else:
             filtered_keys.extend(keys)
             curr_initiative = calculate_estimation(
-                args_list, initiative, filtered_keys, initiative_issue, args.story_point_weight, args.story_point_weight_ceiling)
-            curr_initiative.dict()
+                args_list, filtered_keys, initiative_issue, args.story_point_weight, args.story_point_weight_ceiling)
 
         initiatives_container.append(curr_initiative)
 
@@ -356,7 +385,6 @@ def execute(args_list):
         # update the SP estimate on the initiatives
         for initiative in initiatives_container:
             print("Updating initiative: {}".format(initiative.initiative.key))
-            initiative.calculate_estimate_counts()
 
             initiative.initiative.update(fields={
                 INITIAL_TIME_KEY: initiative.summed_time})
@@ -383,11 +411,11 @@ def execute(args_list):
                 start_date_object = None
                 end_date_object = None
 
-                # confirm we have an initiative start date; if we don't have that all bets are off anyways
+                # Confirm we have an initiative start date; if we don't have that all bets are off anyways
                 # check start date of epic; if we don't have that, we yield to the start date of the initiative
                 # if we do have it, we still need to sanity check that the epic doesn't start before the initiatve; if so assume the start date is the
                 # initiative.
-                # if we don't have that, we set the start date to the same month as the end_date
+                # If we don't have that, we set the start date to the same month as the end_date
                 if getattr(initiative.initiative.fields, START_DATE_KEY) is None:
                     skipped_epics.append(epic)
                     continue
@@ -410,20 +438,21 @@ def execute(args_list):
                 else:
                     skipped_epics.append(epic)
                     continue
-
+                # TODO - but... whyyyyyyyy ;-;
                 if getattr(epic.epic.fields, START_DATE_KEY) is None:
                     start_date_object = datetime.datetime(
                         end_date_object.year, end_date_object.month, end_date_object.day)
 
                 total_delta_days = (
                     end_date_object - start_date_object).days + 1
+
                 summed_calc_total_delta_days = (end_date_object - datetime.datetime.today()).days + 1 if start_date_object < datetime.datetime.today(
                 ) and datetime.datetime.today() < end_date_object else total_delta_days
-                delta_months = diff_month(end_date_object, start_date_object)
+                delta_months = diff_month(end_date_object, start_date_object)+1
 
                 itr_date = start_date_object
 
-                for i in range(delta_months+1):
+                for i in range(delta_months):
                     end_date = get_current_month_end_date(
                         itr_date, end_date_object)
                     micro_delta_days = (end_date - itr_date).days + 1
