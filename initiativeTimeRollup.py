@@ -330,6 +330,7 @@ def calculate_estimation(args_list, filtered_keys, initiative_issue, story_point
     epics_container = epicTimeRollup.execute(
         new_args) if len(filtered_keys) != 0 else []
 
+    print("Debug: active estimation for initiative {}, {}".format(initiative_issue.key, epics_container))
     curr_initiative = Initiative(
         initiative_issue, epics_container, 0.0, 0.0, 0, 0, 0.0, story_point_weight, story_point_weight_ceiling)
 
