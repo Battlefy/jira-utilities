@@ -89,8 +89,6 @@ class Initiative:
             self.incomplete_estimated_count += epic.incomplete_estimated_count
             self.incomplete_unestimated_count += epic.incomplete_unestimated_count
 
-        print("Debug: calculate estimate for {}, {}".format(self.initiative.key, self.summed_time))
-
         self.estimation_confidence = 0 if self.incomplete_estimated_count == 0 and self.incomplete_unestimated_count == 0 else (
             self.incomplete_estimated_count / (self.incomplete_estimated_count + self.incomplete_unestimated_count))
         self.estimation_confidence = self.estimation_confidence * 100
