@@ -89,6 +89,8 @@ class Initiative:
             self.incomplete_estimated_count += epic.incomplete_estimated_count
             self.incomplete_unestimated_count += epic.incomplete_unestimated_count
 
+        print("Debug: calculate estimate for {}, {}".format(self.initiative.key, self.summed_time))
+
         self.estimation_confidence = 0 if self.incomplete_estimated_count == 0 and self.incomplete_unestimated_count == 0 else (
             self.incomplete_estimated_count / (self.incomplete_estimated_count + self.incomplete_unestimated_count))
         self.estimation_confidence = self.estimation_confidence * 100
@@ -330,7 +332,6 @@ def calculate_estimation(args_list, filtered_keys, initiative_issue, story_point
     epics_container = epicTimeRollup.execute(
         new_args) if len(filtered_keys) != 0 else []
 
-    print("Debug: active estimation for initiative {}, {}".format(initiative_issue.key, epics_container))
     curr_initiative = Initiative(
         initiative_issue, epics_container, 0.0, 0.0, 0, 0, 0.0, story_point_weight, story_point_weight_ceiling)
 
