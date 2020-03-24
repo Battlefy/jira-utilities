@@ -234,6 +234,7 @@ def extract_issue_estimate(jira, epic_sub_issue, project_constants, update_ticke
 
     # If it's a task, there is no further roll-up
     if epic_sub_issue.issue.fields.issuetype.id == project_constants.task.type_id:
+        print("Debug: task {}, has an estimate of {}".format(epic_sub_issue.issue.key, getattr(epic_sub_issue.issue.fields, project_constants.task.estimation_key)))
         if hasattr(epic_sub_issue.issue.fields, project_constants.task.estimation_key) and getattr(epic_sub_issue.issue.fields, project_constants.task.estimation_key) is not None:
             epic_sub_issue.summed_time += float(
                 getattr(epic_sub_issue.issue.fields, project_constants.task.estimation_key))
