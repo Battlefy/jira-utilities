@@ -40,6 +40,7 @@ class Epic:
         """
         """
         for issue in new_issues:
+            print("Debug: epic {} has issue {}".format(self.epic.key, issue.issue.key))
             extract_issue_estimate(
                 jira, issue, project_configs[self.epic.fields.project.id], update_ticket_estimates, force_toplevel_recalculate)
 
