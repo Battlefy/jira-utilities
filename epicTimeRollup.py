@@ -186,7 +186,7 @@ def generate_project_constants(jira, project, load_from_file=False, configuratio
                     if issue_expanded_data['fields'][field_key]['name'] == 'Story point estimate':
                         project_strtype_id_map[project.id][issue_type.name]['estimate_field'] = field_key
             except Exception as e:
-                print("Failed to extract metadata needed for estimates.")
+                print("Failed to extract metadata needed for estimates for project {}".format(project.id))
                 print(e)
                 sys.exit(-1)
 
